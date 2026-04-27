@@ -1,0 +1,45 @@
+# Agent Ignore — files and directories the agent should skip
+
+# Node.js
+node_modules/
+.next/
+out/
+.cache/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.production
+.env.development
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
+
+# Test artifacts
+coverage/
+.jest-cache/
+__snapshots__/
+
+# MongoDB local data
+mongodb-data/
+
+# Agent artifacts
+.gemini/
+
+# Graphify output (agent reads, not modifies)
+# graphify-out/
+
+# Next.js generated types
+.next/types/
