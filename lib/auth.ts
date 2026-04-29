@@ -9,6 +9,7 @@ export const authOptions: NextAuthOptions = {
         username: { label: 'Username', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
+      
       async authorize(credentials) {
         // Dummy credentials for now as requested
         if (

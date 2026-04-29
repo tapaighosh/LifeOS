@@ -1,0 +1,27 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "rootDir": ".",
+  "testMatch": ["<rootDir>/tests/**/*.test.ts", "<rootDir>/tests/**/*.test.tsx"],
+  "moduleNameMapper": {
+    "^@/(.*)$": "<rootDir>/$1"
+  },
+  "transform": {
+    "^.+\\.tsx?$": ["ts-jest", {
+      "tsconfig": {
+        "strict": true,
+        "esModuleInterop": true,
+        "jsx": "react-jsx"
+      }
+    }]
+  },
+  "testTimeout": 60000,
+  "testTimeout": 60000,
+  "collectCoverageFrom": [
+    "models/**/*.ts",
+    "lib/**/*.ts",
+    "app/api/**/*.ts",
+    "hooks/**/*.ts",
+    "!**/*.d.ts"
+  ]
+}
