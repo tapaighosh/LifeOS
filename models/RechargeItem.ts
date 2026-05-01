@@ -11,10 +11,26 @@ export interface IRechargeItem extends Document {
 
 const RechargeItemSchema: Schema<IRechargeItem> = new Schema(
   {
-    title: { type: String, required: true },
-    duration: { type: Number, required: true },
-    favourite: { type: Boolean, default: false },
-    active: { type: Boolean, default: true },
+    title: { 
+      type: String, 
+      required: [true, 'Title is required'],
+      trim: true,
+      maxlength: [100, 'Title cannot exceed 100 characters']
+    },
+    duration: { 
+      type: Number, 
+      required: [true, 'Duration is required'],
+      min: [5, 'Duration must be at least 5 minutes'],
+      max: [15, 'Duration must be 15 minutes or less']
+    },
+    favourite: { 
+      type: Boolean, 
+      default: false 
+    },
+    active: { 
+      type: Boolean, 
+      default: true 
+    },
   },
   {
     timestamps: true,
