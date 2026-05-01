@@ -66,3 +66,5 @@ mongodb-data/
 
 #graphify output
 graphify-out/
+
+package-lock.json
