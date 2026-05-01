@@ -28,3 +28,15 @@
 **Notes:** Added `useRecharge` SWR hook for smooth UI updates. Handled `duration` validation both in Zod and Mongoose.  
 
 ---
+
+### 2026-05-01 16:00 — MODULE 3
+
+**Prompt Summary:** Implement Module 3 — User Settings & Preferences  
+**Module:** 3 (User Settings & Preferences)  
+**Phase:** 1  
+**Files Modified:** `models/UserSettings.ts`, `lib/validators/settings.ts`, `app/api/settings/route.ts`, `hooks/useSettings.ts`, `components/settings/SettingsManager.tsx`, `app/settings/page.tsx`, `tests/settings/settings.test.ts`  
+**Outcome:** Implemented complete settings feature. Mongoose and Zod logic correctly enforce time formats and the 100% pillar balance rule. Auto-seeds default settings on first load. Built full UI for updating routines, notifications, and balancing targets.  
+**AI Model Used:** Gemini 3.1 Pro (High)  
+**Notes:** Replaced Mongoose callback-based `pre('validate')` with standard `this.invalidate(...)` without `next()` to match Mongoose 9+ behavior. Built visually pleasing UI with range sliders for pillar allocation.  
+
+---
