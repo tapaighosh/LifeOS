@@ -12,7 +12,7 @@
 | `event_blocks` | date_start, date_end, type, label, impact, prep_task_added | `date_start`, `date_end` |
 | `recharge_items` | title, duration, favourite, active | `active` |
 | `revision_queue` | task_id, original_title, learned_on, next_revision, revision_history[], cycle_index | `next_revision`, `task_id` |
-| `user_settings` | wake_time, sleep_time, leave_time, return_time, notification_morning, notification_night, timezone, pillar_balance_target | — |
+| `user_settings` | wake_time, sleep_time, leave_time, return_time, notification_morning, notification_night, timezone, pillar_balance_target, days_off | — |
 
 ### Task Schema Detail
 ```

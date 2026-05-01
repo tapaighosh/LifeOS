@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         notification_night: '21:30',
         timezone: 'Asia/Kolkata',
         pillar_balance_target: { money: 40, soul: 30, curiosity: 30 },
+        days_off: [0, 6],
       });
       settings = defaultSettings.toObject();
     }
@@ -78,7 +79,7 @@ export async function PATCH(request: NextRequest) {
     const updated = await UserSettings.findByIdAndUpdate(
       settingsToUpdate._id,
       { $set: parseResult.data },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).lean();
 
     return NextResponse.json(updated, { status: 200 });

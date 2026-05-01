@@ -11,6 +11,7 @@ export interface UserSettings {
   notification_morning: string;
   notification_night: string;
   timezone: string;
+  days_off: number[];
   pillar_balance_target: {
     money: number;
     soul: number;
