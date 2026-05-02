@@ -131,7 +131,7 @@ const TaskSchema: Schema<ITask> = new Schema(
  * Recharge tasks are micro-breaks (10–15 min max).
  * Enforced both here and in the Zod validator for defence-in-depth.
  */
-TaskSchema.pre('validate', function (next) {
+TaskSchema.pre('validate', function () {
   if (this.type === 'recharge' && this.duration > 15) {
     this.invalidate(
       'duration',
@@ -139,7 +139,6 @@ TaskSchema.pre('validate', function (next) {
       this.duration
     );
   }
-  next();
 });
 
 // ─── Indexes ─────────────────────────────────────────────────────────────────
