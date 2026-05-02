@@ -87,3 +87,15 @@
 **Notes:** Handled the complexities of extracting overlapping tasks out of already-scheduled DailyPlans. Kept the UI dependency-free by building the grid natively.
 
 ---
+
+### 2026-05-02 15:09 — MODULE 7 (AI Integration)
+
+**Prompt Summary:** Implement Module 7 — AI Integration (Claude + Gemini)
+**Module:** 7 (AI Integration)
+**Phase:** 3
+**Files Modified:** `lib/errors.ts`, `lib/ai/modelSelector.ts`, `lib/ai/promptBuilder.ts`, `lib/ai/responseParser.ts`, `lib/ai/insightBuilder.ts`, `lib/ai/weeklyReview.ts`, `app/api/plan/generate/route.ts`, `app/api/log/checkin/route.ts`, `tests/ai/ai.test.ts`
+**Outcome:** Replaced the pure rule-based scheduler with a primary AI-driven `modelSelector` supporting Anthropic (Claude Sonnet/Haiku) and Google (Gemini Flash). Implemented strict JSON parsing with Zod validation and a 1-time retry mechanism before gracefully falling back to the rule-based engine. Updated the check-in route to dynamically generate encouraging night insights based on the user's logged data.
+**AI Model Used:** Gemini 3.1 Pro (High)
+**Notes:** Added the official SDKs `@anthropic-ai/sdk` and `@google/generative-ai`. Created `AIServiceError` to standardize provider error handling.
+
+---

@@ -1,55 +1,56 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { AIServiceError } from '@/lib/errors';
 
-type AIProvider = 'claude' | 'gemini' | 'rule-based';
+type ProviderConfig = 'claude' | 'gemini' | 'claude-dev' | 'gemini-dev';
 
-export async function selectModel(): Promise<AIProvider> {
-  const provider = process.env.AI_PROVIDER as AIProvider || 'claude';
-  return provider;
-}
-
-export async function generateAIPlan(context: any, provider: AIProvider) {
-  if (provider === 'claude') {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.warn('No Anthropic API key, falling back to rule-based');
-      return null;
-    }
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+export async function generateContent(systemPrompt: string, userPrompt: string, temperature: number = 0.3): Promise<string> {
+  const provider = (process.env.AI_PROVIDER as ProviderConfig) || 'claude';
+  
+  try {
+    return await tryGenerate(provider, systemPrompt, userPrompt, temperature);
+  } catch (error: any) {
+    console.error(`[AI] Primary provider ${provider} failed:`, error);
     
-    // In a real implementation, we would pass the prompt here
-    // For this boilerplate, we'll just mock a failure so it falls back to rule-based
-    // or simulate a simple response
+    // Fallback logic
+    const fallbackProvider = provider.includes('claude') ? 'gemini' : 'claude';
     try {
-      /*
-      const response = await anthropic.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1000,
-        temperature: 0.3,
-        system: "You are a personal scheduling assistant returning valid JSON.",
-        messages: [{ role: 'user', content: JSON.stringify(context) }]
-      });
-      return JSON.parse(response.content[0].text);
-      */
-      return null; // Force fallback to rule-based for testing, adjust as needed.
-    } catch (e) {
-      console.error('Claude API Error', e);
-      return null;
-    }
-  } else if (provider === 'gemini') {
-    if (!process.env.GEMINI_API_KEY) {
-      console.warn('No Gemini API key, falling back to rule-based');
-      return null;
-    }
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    try {
-      // Same mock failure
-      return null;
-    } catch(e) {
-      console.error('Gemini API Error', e);
-      return null;
+      console.log(`[AI] Attempting fallback to ${fallbackProvider}`);
+      return await tryGenerate(fallbackProvider as ProviderConfig, systemPrompt, userPrompt, temperature);
+    } catch (fallbackError: any) {
+      console.error(`[AI] Fallback provider ${fallbackProvider} also failed:`, fallbackError);
+      throw new AIServiceError('All AI providers failed', 'all', true);
     }
   }
-  
-  return null;
+}
+
+async function tryGenerate(provider: ProviderConfig, systemPrompt: string, userPrompt: string, temperature: number): Promise<string> {
+  if (provider.includes('claude')) {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const model = provider === 'claude-dev' ? 'claude-3-haiku-20240307' : 'claude-3-5-sonnet-20241022';
+    
+    const msg = await anthropic.messages.create({
+      model,
+      max_tokens: 2000,
+      temperature,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+    
+    return msg.content.map(c => ('text' in c ? c.text : '')).join('');
+  } else {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+    const modelName = provider === 'gemini-dev' ? 'gemini-1.5-flash' : 'gemini-2.0-flash'; // Or 2.5 flash
+    const model = genAI.getGenerativeModel({ 
+      model: modelName,
+      systemInstruction: systemPrompt 
+    });
+    
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      generationConfig: { temperature }
+    });
+    
+    return result.response.text();
+  }
 }

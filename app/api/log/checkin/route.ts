@@ -7,6 +7,7 @@ import DailyPlan from '@/models/DailyPlan';
 import RevisionQueue from '@/models/RevisionQueue';
 import Task from '@/models/Task';
 import { dayLogCheckinSchema } from '@/lib/validators/dayLog';
+import { buildNightInsight } from '@/lib/ai/insightBuilder';
 
 export async function POST(request: NextRequest) {
   try {
@@ -136,12 +137,19 @@ export async function POST(request: NextRequest) {
       if ((curiosityCount / total) < 0.15) neglectedPillars.push('curiosity');
     }
 
+    // 6. Generate AI Night Insight
+    const aiInsight = await buildNightInsight(dayLog.toObject());
+    if (aiInsight) {
+      dayLog.ai_insight = aiInsight;
+      await dayLog.save();
+    }
+
     return NextResponse.json({
       success: true,
       log: dayLog,
       tomorrowPreview: topTasks,
       neglectedPillars,
-      aiPlaceholder: "Insight will be available after Module 7"
+      aiPlaceholder: aiInsight || "Insight generation failed or skipped."
     }, { status: 200 });
   } catch (error) {
     console.error('[POST /api/log/checkin]', error);

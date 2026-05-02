@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import UserSettings from '@/models/UserSettings';
 import DailyPlan from '@/models/DailyPlan';
+import { generateAndParsePlan } from '@/lib/ai/responseParser';
 import { collectPlanContext } from '@/lib/scheduler/contextCollector';
 import { generatePlan } from '@/lib/scheduler/planGenerator';
 
@@ -42,8 +43,28 @@ export async function POST(request: NextRequest) {
     // @ts-ignore
     const context = await collectPlanContext(date, settings);
     
-    // Generate Plan
-    const planDoc = generatePlan(context);
+    let planDoc: any;
+    
+    // Attempt AI Generation
+    console.time('[AI] Generate Plan');
+    const aiPlan = await generateAndParsePlan(context);
+    console.timeEnd('[AI] Generate Plan');
+
+    if (aiPlan) {
+      console.log('[AI] Successfully generated plan with AI');
+      planDoc = {
+        date,
+        locked: false,
+        source: 'ai',
+        plan: aiPlan.plan.map((t: any) => ({ ...t, status: 'pending' })),
+        skipped_tasks: aiPlan.skipped_tasks,
+        ai_note: aiPlan.ai_note
+      };
+    } else {
+      console.log('[AI] Falling back to rule-based scheduler');
+      // Generate Plan using Rule-Based fallback
+      planDoc = generatePlan(context);
+    }
 
     // Save to DB (Upsert)
     const savedPlan = await DailyPlan.findOneAndUpdate(
