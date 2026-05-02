@@ -64,3 +64,15 @@
 **Notes:** Handled slot boundaries carefully with Mongoose ObjectId types and Date objects. Added a custom SWR hook `usePlan` to elegantly abstract the drag-and-drop state modifications and backend synchronization.
 
 ---
+
+### 2026-05-02 12:30 — MODULE 5 (Night Check-In Flow)
+
+**Prompt Summary:** Implement Module 5 — Night Check-In Flow
+**Module:** 5 (Night Check-In Flow)
+**Phase:** 1
+**Files Modified:** `models/DayLog.ts`, `lib/validators/dayLog.ts`, `app/api/log/checkin/route.ts`, `app/api/log/[date]/route.ts`, `app/checkin/page.tsx`, `components/checkin/CheckInForm.tsx`, `tests/checkin/checkin.test.ts`
+**Outcome:** Created the Night Check-In flow allowing users to grade their day. Implemented a detailed checklist showing today's tasks with 'Done', 'Partial' (with slider), and 'Skipped' (with reason) actions. Enforced energy rating selection and optional daily reflection. Added backend logic to sync statuses with the `DailyPlan`, track neglected pillars over the last 7 days, generate a simple 'Tomorrow Preview', and advance the `RevisionQueue` cycles for completed tasks.
+**AI Model Used:** Gemini 3.1 Pro (Low)
+**Notes:** Added `completion_pct` and `skip_reason` to the `DayLog` model to match the BRD requirements. Removed duplicate Mongoose index warning on `DayLog`.
+
+---
