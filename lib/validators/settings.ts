@@ -26,6 +26,7 @@ export const settingsUpdateSchema = z.object({
   notification_night: TimeString.optional(),
   timezone: z.string().optional(),
   pillar_balance_target: PillarBalanceSchema.optional(),
+  days_off: z.array(z.number().min(0).max(6)).optional(),
 });
 
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;

@@ -13,6 +13,7 @@ export interface IUserSettings extends Document {
     soul: number;
     curiosity: number;
   };
+  days_off: number[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +40,16 @@ const UserSettingsSchema: Schema<IUserSettings> = new Schema(
       soul: { type: Number, default: 30, min: 0, max: 100 },
       curiosity: { type: Number, default: 30, min: 0, max: 100 },
     },
+    days_off: {
+      type: [Number],
+      default: [0, 6], // Sunday and Saturday by default
+      validate: {
+        validator: function (v: number[]) {
+          return v.every(day => day >= 0 && day <= 6);
+        },
+        message: 'Days off must be integers between 0 and 6.',
+      },
+    },
   },
   {
     timestamps: true,
@@ -58,7 +69,9 @@ UserSettingsSchema.pre('validate', function () {
   }
 });
 
-const UserSettings: Model<IUserSettings> =
-  mongoose.models.UserSettings || mongoose.model<IUserSettings>('UserSettings', UserSettingsSchema);
+if (mongoose.models.UserSettings) {
+  delete mongoose.models.UserSettings;
+}
+const UserSettings: Model<IUserSettings> = mongoose.model<IUserSettings>('UserSettings', UserSettingsSchema);
 
 export default UserSettings;

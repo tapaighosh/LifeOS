@@ -18,6 +18,16 @@ const TIMEZONES = [
   'Australia/Sydney',
 ];
 
+const DAYS_OF_WEEK = [
+  { value: 0, label: 'Sun' },
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+];
+
 export function SettingsManager() {
   const { settings, isLoading, error, updateSettings } = useSettings();
   
@@ -37,6 +47,7 @@ export function SettingsManager() {
         notification_night: settings.notification_night,
         timezone: settings.timezone,
         pillar_balance_target: settings.pillar_balance_target,
+        days_off: settings.days_off || [],
       });
     }
   }, [settings]);
@@ -56,6 +67,22 @@ export function SettingsManager() {
         [pillar]: value,
       },
     }));
+    setSaveSuccess(false);
+    setSaveError(null);
+  };
+
+  const toggleDayOff = (dayValue: number) => {
+    setForm((prev) => {
+      const currentDaysOff = prev.days_off || [];
+      const isOff = currentDaysOff.includes(dayValue);
+      
+      return {
+        ...prev,
+        days_off: isOff
+          ? currentDaysOff.filter((d) => d !== dayValue)
+          : [...currentDaysOff, dayValue],
+      };
+    });
     setSaveSuccess(false);
     setSaveError(null);
   };
@@ -169,6 +196,36 @@ export function SettingsManager() {
                 required
               />
             </div>
+          </div>
+        </section>
+
+        {/* DAYS OFF */}
+        <section className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/60 space-y-4">
+          <h3 className="text-sm font-semibold tracking-wide text-zinc-300 flex items-center gap-2 border-b border-zinc-800 pb-3">
+            <Settings className="h-4 w-4" /> Days Off
+          </h3>
+          <p className="text-xs text-zinc-400">
+            Select the days you do not work. Standard scheduling rules (like commute times) might be skipped on these days.
+          </p>
+          <div className="flex flex-wrap gap-2 pt-2">
+            {DAYS_OF_WEEK.map((day) => {
+              const isOff = form.days_off?.includes(day.value);
+              return (
+                <button
+                  key={day.value}
+                  type="button"
+                  onClick={() => toggleDayOff(day.value)}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-medium transition-colors border",
+                    isOff
+                      ? "bg-rose-500/20 text-rose-300 border-rose-500/30 hover:bg-rose-500/30"
+                      : "bg-zinc-800/80 text-zinc-400 border-zinc-700 hover:bg-zinc-700 hover:text-zinc-200"
+                  )}
+                >
+                  {day.label}
+                </button>
+              );
+            })}
           </div>
         </section>
 
