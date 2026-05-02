@@ -76,3 +76,14 @@
 **Notes:** Added `completion_pct` and `skip_reason` to the `DayLog` model to match the BRD requirements. Removed duplicate Mongoose index warning on `DayLog`.
 
 ---
+### 2026-05-02 12:56 — MODULE 6 (Event Blocks & Calendar)
+
+**Prompt Summary:** Implement Module 6 — Event Blocks & Calendar
+**Module:** 6 (Event Blocks & Calendar)
+**Phase:** 1
+**Files Modified:** `models/EventBlock.ts`, `lib/events/rescheduleHandler.ts`, `app/api/events/route.ts`, `app/api/events/[id]/route.ts`, `components/calendar/EventCard.tsx`, `components/calendar/EventForm.tsx`, `app/calendar/page.tsx`, `tests/events/events.test.ts`
+**Outcome:** Created the Event Block feature allowing users to add spontaneous or planned blocks (Trek, Travel, Bike Ride, etc.). Added `rescheduleHandler.ts` to smartly react to newly created events: automatically generating preparation tasks for `travel` blocks and intelligently displacing existing scheduled tasks from `DailyPlan` into the `skipped_tasks` queue so they carry over. Built a monthly CSS-grid Calendar UI and implemented test cases covering the displacement engine.
+**AI Model Used:** Gemini 3.1 Pro (High)
+**Notes:** Handled the complexities of extracting overlapping tasks out of already-scheduled DailyPlans. Kept the UI dependency-free by building the grid natively.
+
+---
