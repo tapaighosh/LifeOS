@@ -18,6 +18,7 @@ export interface IDailyPlan extends Document {
   source: 'ai' | 'rule-based';
   skipped_tasks: Types.ObjectId[];
   locked: boolean;
+  paused: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,14 +42,15 @@ const DailyPlanSchema: Schema<IDailyPlan> = new Schema(
     source: { type: String, enum: ['ai', 'rule-based'], required: true },
     skipped_tasks: [{ type: Schema.Types.ObjectId, ref: 'Task' }],
     locked: { type: Boolean, default: false },
+    paused: { type: Boolean, default: false },
   },
   {
     timestamps: true,
   }
 );
 
-DailyPlanSchema.index({ date: 1 });
-
-const DailyPlan: Model<IDailyPlan> = mongoose.models.DailyPlan || mongoose.model<IDailyPlan>('DailyPlan', DailyPlanSchema);
+const DailyPlan: Model<IDailyPlan> =
+  mongoose.models.DailyPlan ||
+  mongoose.model<IDailyPlan>('DailyPlan', DailyPlanSchema);
 
 export default DailyPlan;

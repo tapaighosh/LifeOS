@@ -40,3 +40,27 @@
 **Notes:** Replaced Mongoose callback-based `pre('validate')` with standard `this.invalidate(...)` without `next()` to match Mongoose 9+ behavior. Built visually pleasing UI with range sliders for pillar allocation.  
 
 ---
+
+### 2026-05-01 16:50 — MODULE 4 & 7 (Dashboard & AI Generation)
+
+**Prompt Summary:** Implement Module 4 Dashboard and Module 7 AI generation. Also add "Days Off" option to User Settings.  
+**Module:** 4 (Daily Plan Generation) & 7 (AI Integration)  
+**Phase:** 2 & 3  
+**Files Modified:** `models/UserSettings.ts`, `lib/validators/settings.ts`, `components/settings/SettingsManager.tsx`, `models/DailyPlan.ts`, `lib/scheduler/*`, `lib/ai/*`, `app/api/plan/*`, `hooks/usePlan.ts`, `components/plan/*`, `app/dashboard/*`  
+**Outcome:** Added "days_off" to user settings. Created the `modelSelector`, `planGenerator` (Rule-Based), and context extraction for AI scheduling. Built the interactive Dashboard with `dnd-kit` for drag-and-drop planning. Added "On a Tour?" pause functionality for DailyPlan.  
+**AI Model Used:** Gemini 3.1 Pro (High)  
+**Notes:** The plan generation handles "days off" logic and seamlessly falls back to a custom rule-based engine if AI APIs are missing or fail. Reordering the plan visually works and saves the locked/paused state.
+
+---
+
+### 2026-05-02 12:00 — MODULE 4 (Rule-Based Scheduler & Dashboard UI)
+
+**Prompt Summary:** Implement Module 4 — Daily Plan Generation (Rule-Based)
+**Module:** 4 (Daily Plan Generation)
+**Phase:** 1
+**Files Modified:** `lib/scheduler/slotCalculator.ts`, `lib/scheduler/contextCollector.ts`, `lib/scheduler/planGenerator.ts`, `app/api/plan/generate/route.ts`, `app/api/plan/today/route.ts`, `app/api/plan/reorder/route.ts`, `app/api/plan/lock/route.ts`, `components/plan/DayPlan.tsx`, `components/plan/TaskBlock.tsx`, `components/plan/RechargeBlock.tsx`, `components/plan/PillarBadge.tsx`, `app/dashboard/page.tsx`, `tests/scheduler/scheduler.test.ts`, `hooks/usePlan.ts`
+**Outcome:** Created a rule-based plan generator that filters available slots based on events, aggregates context (carryovers, priorities, energy ratings), and schedules tasks optimally with recharge breaks. Built APIs for fetch/generate/reorder/lock. Implemented dashboard Morning View featuring drag-to-reorder UI and visual pillar tags. Added tests for core scheduler algorithms.
+**AI Model Used:** Gemini 3.1 Pro (High)
+**Notes:** Handled slot boundaries carefully with Mongoose ObjectId types and Date objects. Added a custom SWR hook `usePlan` to elegantly abstract the drag-and-drop state modifications and backend synchronization.
+
+---
