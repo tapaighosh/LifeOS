@@ -63,3 +63,8 @@ mongodb-data/
 *.pid
 *.seed
 *.pid.lock
+
+#graphify output
+graphify-out/
+
+package-lock.json

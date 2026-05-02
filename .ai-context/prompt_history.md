@@ -16,6 +16,7 @@
 **Notes:** Auth is single-user credentials (NextAuth.js) with multi-user expansion planned. Tailwind CSS v3. MongoDB supports both Atlas and local. AI uses Claude primary + Gemini fallback + rule-based last resort. PWA deferred to Phase 5.
 
 ---
+
 ### 2026-05-01 15:30 — MODULE 2
 
 **Prompt Summary:** Implement Module 2 — Recharge Library  
@@ -75,7 +76,6 @@
 **Notes:** Added `completion_pct` and `skip_reason` to the `DayLog` model to match the BRD requirements. Removed duplicate Mongoose index warning on `DayLog`.
 
 ---
-
 ### 2026-05-02 12:56 — MODULE 6 (Event Blocks & Calendar)
 
 **Prompt Summary:** Implement Module 6 — Event Blocks & Calendar
