@@ -16,3 +16,74 @@
 **Notes:** Auth is single-user credentials (NextAuth.js) with multi-user expansion planned. Tailwind CSS v3. MongoDB supports both Atlas and local. AI uses Claude primary + Gemini fallback + rule-based last resort. PWA deferred to Phase 5.
 
 ---
+### 2026-05-01 15:30 — MODULE 2
+
+**Prompt Summary:** Implement Module 2 — Recharge Library  
+**Module:** 2 (Recharge Library)  
+**Phase:** 1  
+**Files Modified:** `models/RechargeItem.ts`, `lib/validators/recharge.ts`, `app/api/recharge/route.ts`, `app/api/recharge/[id]/route.ts`, `hooks/useRecharge.ts`, `components/recharge/RechargeManager.tsx`, `app/recharge/page.tsx`, `tests/recharge/recharge.test.ts`  
+**Outcome:** Implemented complete CRUD for Recharge Items, including validation (5-15 min duration), seeding on first load, optimistic SWR updates, component with emerald styling, and full test coverage.  
+**AI Model Used:** Gemini 3.1 Pro (High)  
+**Notes:** Added `useRecharge` SWR hook for smooth UI updates. Handled `duration` validation both in Zod and Mongoose.  
+
+---
+
+### 2026-05-01 16:00 — MODULE 3
+
+**Prompt Summary:** Implement Module 3 — User Settings & Preferences  
+**Module:** 3 (User Settings & Preferences)  
+**Phase:** 1  
+**Files Modified:** `models/UserSettings.ts`, `lib/validators/settings.ts`, `app/api/settings/route.ts`, `hooks/useSettings.ts`, `components/settings/SettingsManager.tsx`, `app/settings/page.tsx`, `tests/settings/settings.test.ts`  
+**Outcome:** Implemented complete settings feature. Mongoose and Zod logic correctly enforce time formats and the 100% pillar balance rule. Auto-seeds default settings on first load. Built full UI for updating routines, notifications, and balancing targets.  
+**AI Model Used:** Gemini 3.1 Pro (High)  
+**Notes:** Replaced Mongoose callback-based `pre('validate')` with standard `this.invalidate(...)` without `next()` to match Mongoose 9+ behavior. Built visually pleasing UI with range sliders for pillar allocation.  
+
+---
+
+### 2026-05-01 16:50 — MODULE 4 & 7 (Dashboard & AI Generation)
+
+**Prompt Summary:** Implement Module 4 Dashboard and Module 7 AI generation. Also add "Days Off" option to User Settings.  
+**Module:** 4 (Daily Plan Generation) & 7 (AI Integration)  
+**Phase:** 2 & 3  
+**Files Modified:** `models/UserSettings.ts`, `lib/validators/settings.ts`, `components/settings/SettingsManager.tsx`, `models/DailyPlan.ts`, `lib/scheduler/*`, `lib/ai/*`, `app/api/plan/*`, `hooks/usePlan.ts`, `components/plan/*`, `app/dashboard/*`  
+**Outcome:** Added "days_off" to user settings. Created the `modelSelector`, `planGenerator` (Rule-Based), and context extraction for AI scheduling. Built the interactive Dashboard with `dnd-kit` for drag-and-drop planning. Added "On a Tour?" pause functionality for DailyPlan.  
+**AI Model Used:** Gemini 3.1 Pro (High)  
+**Notes:** The plan generation handles "days off" logic and seamlessly falls back to a custom rule-based engine if AI APIs are missing or fail. Reordering the plan visually works and saves the locked/paused state.
+
+---
+
+### 2026-05-02 12:00 — MODULE 4 (Rule-Based Scheduler & Dashboard UI)
+
+**Prompt Summary:** Implement Module 4 — Daily Plan Generation (Rule-Based)
+**Module:** 4 (Daily Plan Generation)
+**Phase:** 1
+**Files Modified:** `lib/scheduler/slotCalculator.ts`, `lib/scheduler/contextCollector.ts`, `lib/scheduler/planGenerator.ts`, `app/api/plan/generate/route.ts`, `app/api/plan/today/route.ts`, `app/api/plan/reorder/route.ts`, `app/api/plan/lock/route.ts`, `components/plan/DayPlan.tsx`, `components/plan/TaskBlock.tsx`, `components/plan/RechargeBlock.tsx`, `components/plan/PillarBadge.tsx`, `app/dashboard/page.tsx`, `tests/scheduler/scheduler.test.ts`, `hooks/usePlan.ts`
+**Outcome:** Created a rule-based plan generator that filters available slots based on events, aggregates context (carryovers, priorities, energy ratings), and schedules tasks optimally with recharge breaks. Built APIs for fetch/generate/reorder/lock. Implemented dashboard Morning View featuring drag-to-reorder UI and visual pillar tags. Added tests for core scheduler algorithms.
+**AI Model Used:** Gemini 3.1 Pro (High)
+**Notes:** Handled slot boundaries carefully with Mongoose ObjectId types and Date objects. Added a custom SWR hook `usePlan` to elegantly abstract the drag-and-drop state modifications and backend synchronization.
+
+---
+
+### 2026-05-02 12:30 — MODULE 5 (Night Check-In Flow)
+
+**Prompt Summary:** Implement Module 5 — Night Check-In Flow
+**Module:** 5 (Night Check-In Flow)
+**Phase:** 1
+**Files Modified:** `models/DayLog.ts`, `lib/validators/dayLog.ts`, `app/api/log/checkin/route.ts`, `app/api/log/[date]/route.ts`, `app/checkin/page.tsx`, `components/checkin/CheckInForm.tsx`, `tests/checkin/checkin.test.ts`
+**Outcome:** Created the Night Check-In flow allowing users to grade their day. Implemented a detailed checklist showing today's tasks with 'Done', 'Partial' (with slider), and 'Skipped' (with reason) actions. Enforced energy rating selection and optional daily reflection. Added backend logic to sync statuses with the `DailyPlan`, track neglected pillars over the last 7 days, generate a simple 'Tomorrow Preview', and advance the `RevisionQueue` cycles for completed tasks.
+**AI Model Used:** Gemini 3.1 Pro (Low)
+**Notes:** Added `completion_pct` and `skip_reason` to the `DayLog` model to match the BRD requirements. Removed duplicate Mongoose index warning on `DayLog`.
+
+---
+
+### 2026-05-02 12:56 — MODULE 6 (Event Blocks & Calendar)
+
+**Prompt Summary:** Implement Module 6 — Event Blocks & Calendar
+**Module:** 6 (Event Blocks & Calendar)
+**Phase:** 1
+**Files Modified:** `models/EventBlock.ts`, `lib/events/rescheduleHandler.ts`, `app/api/events/route.ts`, `app/api/events/[id]/route.ts`, `components/calendar/EventCard.tsx`, `components/calendar/EventForm.tsx`, `app/calendar/page.tsx`, `tests/events/events.test.ts`
+**Outcome:** Created the Event Block feature allowing users to add spontaneous or planned blocks (Trek, Travel, Bike Ride, etc.). Added `rescheduleHandler.ts` to smartly react to newly created events: automatically generating preparation tasks for `travel` blocks and intelligently displacing existing scheduled tasks from `DailyPlan` into the `skipped_tasks` queue so they carry over. Built a monthly CSS-grid Calendar UI and implemented test cases covering the displacement engine.
+**AI Model Used:** Gemini 3.1 Pro (High)
+**Notes:** Handled the complexities of extracting overlapping tasks out of already-scheduled DailyPlans. Kept the UI dependency-free by building the grid natively.
+
+---
