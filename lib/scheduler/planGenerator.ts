@@ -25,7 +25,7 @@ export function generatePlan(context: PlanContext) {
   };
 
   context.carryoverTasks.forEach(processTask);
-  context.revisionTasks.forEach(processTask);
+  (context.revisionTasks as ITask[]).forEach(processTask);
   context.todayTasks.forEach(processTask);
 
   let tasksToSchedule = Array.from(allTasksMap.values());
