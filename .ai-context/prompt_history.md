@@ -124,7 +124,25 @@
 
 ---
 
-### 2026-05-09 16:38 — MODULE P2-A (Challenge System)
+### 2026-05-09 16:54 — MODULE P2-B (Responsive Navigation)
+
+**Prompt Summary:** Implement Module P2-B — Responsive Navigation (dual layout)  
+**Module:** P2-B (Responsive Navigation)  
+**Phase:** 2  
+**Branch:** `feature/p2a-challenge-system`  
+**Files Modified:**
+- `components/layout/Navigation.tsx` — full rewrite: 6-item nav, dual render tree (mobile bottom bar + desktop sidebar), SWR challenge badge, setInterval Sunday check
+- `app/layout.tsx` — added `md:pb-0 md:pl-16` to body for desktop sidebar clearance
+
+**Outcome:** Navigation now renders a `md:hidden` mobile bottom bar (unchanged behavior) and a `hidden md:flex` fixed left sidebar (w-16, icon-only with title tooltips, left-border active indicator, logo mark). Challenges badge appears when active challenges exist. Sunday evening Insights highlight re-evaluates every 60 s via setInterval.  
+**AI Model Used:** Gemini 2.5 Pro  
+**Design Decisions:**
+- Two separate render trees (not one toggled element) — cleaner DOM, no hidden-element overhead, no CSS specificity fights between horizontal/vertical layout variants
+- SWR polls challenges every 30 s for badge freshness without a full page reload
+- `md:pl-16` on body (not per-page) ensures every current and future page gets sidebar clearance automatically
+- `pb-16 md:pb-0` pattern — mobile bottom bar clearance only where the bar exists
+
+
 
 **Prompt Summary:** Implement Module P2-A — Challenge System  
 **Module:** P2-A (Challenge System)  
