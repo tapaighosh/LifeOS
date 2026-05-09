@@ -111,3 +111,15 @@
 **Notes:** Used UTC midnight throughout to avoid timezone off-by-one bugs. Added alias fields (date, slots, pendingTasks, pillarBalance, energyHistory) to PlanContext so both AI prompt builder and rule-based generator share the same context without type conflicts. All 10 tests pass.
 
 ---
+
+### 2026-05-07 14:55 — MODULE 9 (Weekly Review & Insights)
+
+**Prompt Summary:** Implement Module 9 — Weekly Review & Insights
+**Module:** 9 (Weekly Review & Insights)
+**Phase:** 2
+**Files Modified:** `lib/insights/weeklyAggregator.ts`, `lib/ai/weeklyReview.ts`, `app/api/insights/weekly/route.ts`, `app/api/insights/pillars/route.ts`, `app/api/insights/energy/route.ts`, `components/insights/*.tsx`, `app/insights/page.tsx`, `components/layout/Navigation.tsx`, `app/layout.tsx`, `tests/insights/weekly.test.ts`
+**Outcome:** Built the Weekly Insights module. Created an aggregation engine to calculate pillar balance, completion rates, streaks, recharge compliance, and neglected pillars. Created an AI insight builder using Gemini 3.1 Pro to give a 2-line observation/recommendation summary. Created Insight API routes. Built UI components (`PillarChart`, `StreakBadge`, `EnergyTrend`, `WeekSummary`, `AIReviewCard`) and the `/insights` page. Added a sticky bottom `Navigation` bar across the app which highlights the Insights tab on Sunday evenings. Added tests ensuring math logic and edge cases are correct.
+**AI Model Used:** Gemini 3.1 Pro (High)
+**Notes:** Added missing `source` field in tests to fix mongoose validation errors. Used simple CSS for charts to avoid extra libraries.
+
+---
