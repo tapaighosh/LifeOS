@@ -71,12 +71,13 @@ export function generatePlan(context: PlanContext) {
           planEntries.push({
             time_start: formatTime(currentTime),
             time_end: formatTime(endTime),
-            task_id: new mongoose.Types.ObjectId(), // Fake ID for recharge
+            task_id: rechargeItem._id as mongoose.Types.ObjectId, // Bug A fix: use real RechargeItem._id
             title: `Recharge: ${rechargeItem.title}`,
-            pillar: 'soul', // Recharge is usually soul
+            pillar: 'soul',
             type: 'recharge',
             energy_cost: 'low',
             status: 'pending',
+            entry_type: 'recharge', // Distinguishes break entries from real tasks
           });
           currentTime = endTime;
           remainingMinutes -= rechargeItem.duration;
@@ -101,6 +102,7 @@ export function generatePlan(context: PlanContext) {
           type: task.type,
           energy_cost: task.energy_cost,
           status: 'pending',
+          entry_type: 'task',
         });
         
         scheduledTaskIds.add(task._id!.toString());
