@@ -28,6 +28,7 @@ export interface ITask extends Document {
   priority: number;
   notes?: string;
   active: boolean;
+  challenge_id?: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -119,6 +120,12 @@ const TaskSchema: Schema<ITask> = new Schema(
       type: Boolean,
       default: true,
     },
+    // Links task back to a Challenge document (null for all non-challenge tasks)
+    challenge_id: {
+      type: Schema.Types.ObjectId,
+      ref: 'Challenge',
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -147,6 +154,7 @@ TaskSchema.index({ pillar: 1 });
 TaskSchema.index({ active: 1 });
 TaskSchema.index({ type: 1 });
 TaskSchema.index({ priority: -1 }); // AI sorts by priority DESC when building plans
+TaskSchema.index({ challenge_id: 1 }, { sparse: true }); // sparse: only indexes docs where challenge_id != null
 
 // ─── Model (singleton pattern for Next.js hot-reload safety) ─────────────────
 
