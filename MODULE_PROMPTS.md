@@ -653,3 +653,504 @@ Follow /module-implement. Refer to BRD Phase 5.
 | Data visualization | Module 9 |
 | PWA + Push | Module 10 |
 | Vercel deployment | Module 10 |
+
+---
+
+---
+
+# LifeOS — Phase 2 Module Prompts
+
+> **Phase 2 context block** — paste this at the top of any Phase 2 conversation:
+>
+> ```
+> I'm building LifeOS — Phase 2. Phase 1 (Modules 0–10) is complete.
+> The codebase has: Tasks, Recharge Library, Settings, Rule-based + AI Plan Generation,
+> Night Check-In, Event Blocks, Spaced Repetition, Weekly Insights, PWA.
+>
+> Tech stack: Next.js 14 App Router, TypeScript, MongoDB/Mongoose, NextAuth,
+> Tailwind CSS v3, Zustand, SWR, Claude API + Gemini fallback.
+>
+> Refer to: .ai-context/architecture.md, .ai-context/project_context.md,
+> .agents/rules/production-standards.md, BRD_phase_2.md
+>
+> Follow the /module-implement workflow.
+> ```
+
+---
+
+## Module P2-A — Challenge System
+
+### 🎯 What it does
+Adds a "Challenge" container above tasks — a 30/90-day personal commitment that generates
+a recurring task and tracks streaks, progress, and completion automatically.
+
+### 🧠 What you'll learn
+- Additive Mongoose schema migrations (non-breaking field additions)
+- Post-save side-effect hooks in API routes (vs Mongoose middleware)
+- Static seed data patterns (library served from TS constant, not DB)
+- Conditional business logic based on `target_type` (streak vs total_count vs milestone)
+
+### 📁 Files involved
+- `models/Task.ts` — add `challenge_id` field
+- `models/Challenge.ts` — new model
+- `lib/challenges/library.ts` — static pre-seeded library (~50 challenges)
+- `lib/validators/challenge.ts` — Zod schemas
+- `app/api/challenges/route.ts` — GET list
+- `app/api/challenges/library/route.ts` — GET library
+- `app/api/challenges/accept/route.ts` — POST accept → create task + challenge doc
+- `app/api/challenges/[id]/route.ts` — PATCH (drop/pause/resume), GET detail
+- `app/api/tasks/[id]/route.ts` — MODIFY: soft-delete guard
+- `app/api/log/checkin/route.ts` — MODIFY: add progress hook
+- `app/challenges/page.tsx` — new page (Active / Library / Completed tabs)
+- `components/challenges/` — ChallengeCard, LibraryItem, LibraryFilter, AcceptDrawer, ProgressBar, MiniCard
+
+### ✅ How to verify
+```bash
+# 1. Accept a challenge from the library
+# 2. Check DB: challenges collection has new doc, tasks collection has linked task with challenge_id
+# 3. Submit night check-in with that task marked done
+# 4. Check DB: challenge.current_streak = 1, total_completed = 1
+# 5. Skip it the next night → current_streak resets to 0
+```
+
+### 💬 The Prompt
+
+```
+Implement Module P2-A — Challenge System
+
+Follow /module-implement. Read BRD_phase_2.md (lines 1–120) for full spec.
+Read .ai-context/architecture.md for the existing schema.
+
+IMPORTANT: The ONLY change to the existing Task model is adding one optional field.
+Do NOT restructure any existing code. The challenge module is additive only.
+
+═══ STEP 1 — Extend Task schema (models/Task.ts) ═══
+
+Add to ITask interface and TaskSchema:
+  challenge_id?: mongoose.Types.ObjectId | null   (default: null)
+Add sparse index: TaskSchema.index({ challenge_id: 1 }, { sparse: true })
+This is backward-compatible — all existing task documents are unaffected.
+
+═══ STEP 2 — Create Challenge model (models/Challenge.ts) ═══
+
+New Mongoose model, collection name "challenges":
+  title: String required
+  category: Enum ['physical','mental','financial','social','creative'] required
+  description: String
+  target_type: Enum ['streak','total_count','milestone'] required
+  target_value: Number required (30, 12, 1, etc.)
+  started_on: String (YYYY-MM-DD)
+  status: Enum ['active','completed','dropped','paused'] default 'active'
+  linked_task_id: { type: Schema.Types.ObjectId, ref: 'Task' }
+  current_streak: Number default 0
+  best_streak: Number default 0
+  total_completed: Number default 0
+  last_completed_on: String (YYYY-MM-DD)
+  notes: String optional
+Include TypeScript interface IChallenge.
+Indexes: status, linked_task_id (unique sparse).
+
+═══ STEP 3 — Library seed data (lib/challenges/library.ts) ═══
+
+Create a TypeScript constant CHALLENGE_LIBRARY with ~50 challenges.
+This is NOT seeded to the DB — the route returns it statically.
+Cover all 5 categories (physical, mental, financial, social, creative).
+Include all 3 target_types (streak, total_count, milestone).
+Each entry has: id, title, category, description, target_type, target_value,
+suggested_pillar, suggested_frequency, suggested_duration.
+Use examples from BRD_phase_2.md lines 39–58 as the starting set, then author the rest.
+
+═══ STEP 4 — Zod validators (lib/validators/challenge.ts) ═══
+
+challengeAcceptSchema:
+  library_id: string (references CHALLENGE_LIBRARY[].id)
+  pillar: 'money' | 'soul' | 'curiosity'
+  frequency?: 'daily' | 'alternate' | '3x_week' | 'weekly'  (optional override)
+
+challengeUpdateSchema:
+  status?: 'dropped' | 'paused' | 'active'
+  notes?: string
+
+═══ STEP 5 — API Routes ═══
+
+GET /api/challenges
+  - Return all challenges with status 'active' or 'completed', sorted by started_on DESC
+  - Populate linked_task_id (title, active fields only)
+
+GET /api/challenges/library
+  - Return CHALLENGE_LIBRARY constant, optionally filtered by ?category=
+  - Also indicate which ones the user has already accepted (cross-ref DB)
+
+POST /api/challenges/accept
+  Validate with challengeAcceptSchema.
+  Find library item by library_id from CHALLENGE_LIBRARY.
+  Create Task:
+    title: library item title
+    pillar: from payload
+    type: 'recurring'
+    duration: library item suggested_duration
+    energy_cost: 'medium'
+    slot_preference: 'any'
+    frequency: payload.frequency || library item suggested_frequency
+    active: true
+    challenge_id: (will update after challenge created)
+  Create Challenge document with linked_task_id = new task._id, started_on = today.
+  Update task.challenge_id = challenge._id.
+  Return { challenge, task }.
+
+PATCH /api/challenges/[id]
+  Validate with challengeUpdateSchema.
+  If status = 'dropped': also set linked task active = false.
+  If status = 'paused': do NOT deactivate the task (user may still do it manually).
+  Return updated challenge.
+
+GET /api/challenges/[id]
+  Return challenge + populated task.
+
+═══ STEP 6 — Night check-in hook (app/api/log/checkin/route.ts) ═══
+
+After the existing DayLog save (after line that saves aiInsight), add:
+
+For each entry in entries:
+  1. Find challenge where linked_task_id === entry.task_id
+  2. If no challenge found: skip
+  3. If found and entry.status === 'done':
+       - increment total_completed by 1
+       - update last_completed_on = date (from check-in payload)
+       - if target_type === 'streak':
+           gap = days between last_completed_on (old) and today
+           if gap === 1: increment current_streak by 1
+           if gap > 1: reset current_streak to 1
+           if current_streak > best_streak: update best_streak
+       - if total_completed >= target_value: set status = 'completed'
+       - save challenge
+  4. If found and entry.status === 'skipped' and target_type === 'streak':
+       - set current_streak = 0
+       - save challenge
+  5. If found and entry.status === 'partial' and target_type === 'streak':
+       - set current_streak = 0 (partial does not maintain streak)
+       - save challenge
+
+═══ STEP 7 — Soft-delete guard (app/api/tasks/[id]/route.ts) ═══
+
+In the DELETE handler, before setting active = false:
+  Check: const linkedChallenge = await Challenge.findOne({ linked_task_id: id, status: 'active' })
+  If found: set linkedChallenge.status = 'paused', save it.
+  Continue with soft-delete regardless.
+  Include in response: { paused_challenge: linkedChallenge?.title || null }
+
+═══ STEP 8 — Challenge UI ═══
+
+app/challenges/page.tsx:
+  Server component, auth-protected.
+  Fetch active challenges from /api/challenges.
+  Render 3 tabs: Active | Library | Completed.
+  Each tab is a separate client component.
+
+components/challenges/ChallengeCard.tsx:
+  Props: challenge object.
+  Show: title, category badge, progress bar, streak info, last completed date.
+  Progress bar logic:
+    streak/total_count: (total_completed / target_value) * 100
+    milestone: 0% or 100%
+  Category colors: physical=rose, mental=indigo, financial=amber, social=emerald, creative=purple.
+  Streak display (streak type only): "🔥 Streak: 14 days  Best: 14 days"
+
+components/challenges/ChallengeLibraryItem.tsx:
+  Props: library item + isAlreadyAccepted boolean.
+  Show: title, category badge, description, target_value + type summary.
+  "Accept Challenge" button → opens AcceptChallengeDrawer.
+  If already accepted: show "Active" badge instead of button.
+
+components/challenges/AcceptChallengeDrawer.tsx:
+  Slide-up drawer.
+  Fields: pillar selector (3 options), frequency override (optional).
+  Confirm button → POST /api/challenges/accept → show success toast.
+
+components/challenges/ChallengeMiniCard.tsx:
+  Compact card for dashboard (max 3 shown).
+  Show: title, progress bar, streak/count.
+  Clicking → navigate to /challenges.
+
+All challenge UI uses glassmorphism cards, category-appropriate colors, smooth hover transitions.
+
+═══ STEP 9 — Tests (tests/api/challenges.test.ts) ═══
+
+Test: accept challenge → task created with challenge_id
+Test: night check-in done → streak increments
+Test: night check-in skipped → streak resets (streak type)
+Test: partial on streak challenge → streak resets
+Test: total_completed >= target_value → status = 'completed'
+Test: soft-delete task → challenge status = 'paused'
+Test: library GET with category filter returns subset
+
+Explain each file, why the library is a static constant not a DB seed, and
+how the post-save hook pattern keeps the check-in route testable.
+```
+
+---
+
+## Module P2-B — Responsive Navigation
+
+### 🎯 What it does
+Upgrades the existing mobile-only bottom nav to a responsive system:
+bottom bar on mobile (<768px), left sidebar on desktop (≥768px).
+Adds Challenges and Settings items.
+
+### 📁 Files involved
+- `components/layout/Navigation.tsx` — refactor for dual layout
+- `app/layout.tsx` — add sidebar offset padding
+
+### ✅ How to verify
+```bash
+# Mobile (375px): bottom nav with 6 items visible
+# Desktop (1024px): left sidebar with icons + labels
+# /challenges route: Challenges nav item shows active badge count
+# Sunday after 5pm: Insights item pulses amber
+```
+
+### 💬 The Prompt
+
+```
+Implement Module P2-B — Responsive Navigation
+
+Follow /module-implement.
+
+CURRENT STATE: components/layout/Navigation.tsx renders a fixed bottom bar
+with 5 items using Tailwind + Lucide icons. It works only on mobile.
+
+WHAT TO BUILD:
+
+1. Update nav items array — 6 items in this order:
+   { name: 'Home',       href: '/dashboard',  icon: LayoutDashboard }
+   { name: 'Tasks',      href: '/tasks',       icon: CheckSquare }
+   { name: 'Challenges', href: '/challenges',  icon: Trophy }
+   { name: 'Check-In',   href: '/checkin',     icon: Sparkles }
+   { name: 'Insights',   href: '/insights',    icon: TrendingUp, highlight: isSundayEvening }
+   { name: 'Settings',   href: '/settings',    icon: Settings2 }
+
+2. Challenges badge: fetch active challenge count via SWR:
+   const { data } = useSWR('/api/challenges', fetcher)
+   Show a small dot/badge on the Challenges icon when data?.length > 0.
+
+3. Sunday evening check fix: use setInterval every 60 seconds instead of
+   running once on mount. Clear interval on unmount.
+
+4. Render TWO layouts using Tailwind breakpoints:
+
+   MOBILE (md:hidden) — keep existing bottom bar, just add the 2 new items.
+   Style: fixed bottom-0, bg-zinc-950/80 backdrop-blur-xl, border-t border-zinc-800.
+   Each item: flex-col, icon + label, active = indigo-400, inactive = zinc-500.
+
+   DESKTOP (hidden md:flex) — new left sidebar:
+   Style: fixed left-0 top-0 h-full w-16, bg-zinc-950/90 backdrop-blur-xl,
+   border-r border-zinc-800, flex-col, items-center, py-6, gap-2, z-50.
+   Each item: w-10 h-10 rounded-xl flex items-center justify-center.
+   Active: bg-indigo-500/20 text-indigo-400 with left border indicator (w-0.5 bg-indigo-400).
+   Inactive: text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300.
+   Show icon only (no label) — tooltip on hover showing name (title attribute).
+   Highlight item: text-amber-400 + subtle ring.
+
+5. Update app/layout.tsx:
+   Add class "md:pl-16" to the main content wrapper so content doesn't
+   sit behind the sidebar on desktop.
+
+Keep all existing mobile behavior exactly as-is. This is purely additive.
+Explain the Tailwind breakpoint approach and why we use two separate render trees
+instead of CSS transforms.
+```
+
+---
+
+## Module P2-C — Time-Aware Dashboard
+
+### 🎯 What it does
+Replaces the static dashboard with three time-based views:
+- **Morning** (<12pm): greeting, energy forecast, today's plan, challenge widget, pillar health
+- **Midday** (12–9pm): today's plan + "Add to Today" drawer
+- **Evening** (≥9pm): check-in CTA, today's summary, challenge wins, tomorrow preview
+
+### 📁 Files involved
+- `app/api/dashboard/morning/route.ts` — NEW aggregation route
+- `app/api/dashboard/evening/route.ts` — NEW aggregation route
+- `app/api/plan/add-task/route.ts` — NEW PATCH route
+- `app/dashboard/page.tsx` — refactor to time-switch
+- `components/dashboard/DashboardMorning.tsx` — NEW
+- `components/dashboard/DashboardEvening.tsx` — NEW
+- `components/dashboard/DashboardMidday.tsx` — NEW
+- `components/dashboard/PillarHealthBar.tsx` — NEW
+- `components/dashboard/TomorrowPreview.tsx` — NEW
+- `components/dashboard/AddToTodayDrawer.tsx` — NEW
+
+### ✅ How to verify
+```bash
+# Temporarily override new Date().getHours() to 8 → morning view renders
+# Override to 14 → midday view renders
+# Override to 22 → evening view renders
+# Add to Today drawer: pick a task → appears in today's DailyPlan in DB
+# Pillar health bar: shows correct task counts from this week's plans
+```
+
+### 💬 The Prompt
+
+```
+Implement Module P2-C — Time-Aware Dashboard
+
+Follow /module-implement. Read BRD_phase_2.md (lines 122–235) for full spec.
+Module P2-A (Challenges) must be complete before this module.
+
+═══ STEP 1 — API: GET /api/dashboard/morning ═══
+
+Single aggregation call returning:
+  plan: today's DailyPlan (or null if not generated)
+  activeChallenges: top 3 active challenges sorted by:
+    streak challenges first, then total_count, then milestone
+    each with current_streak, total_completed, target_value, target_type
+  pillarWeek: {
+    money: { count: number, target: number },
+    soul:  { count: number, target: number },
+    curiosity: { count: number, target: number }
+  }
+  — count = tasks with status='done' in daily_plans for the last 7 days
+  — target = from UserSettings.pillar_balance_target (as % of total)
+  energyForecast: average energy_rating from last 3 DayLogs (or null)
+
+═══ STEP 2 — API: GET /api/dashboard/evening ═══
+
+Returns:
+  todaySummary: {
+    totalScheduled: number,
+    totalDone: number,
+    totalSkipped: number,
+    pillarBreakdown: { money: number, soul: number, curiosity: number }
+  }
+  challengeWins: challenges where linked_task appears in today's plan
+    — { title, status ('done'|'skipped'|'pending'), current_streak }
+  tomorrowPreview: top 3 tasks for tomorrow using priority sort
+    (improved: respect frequency — daily tasks always qualify,
+     alternate/weekly tasks qualify if they're due tomorrow)
+
+═══ STEP 3 — API: PATCH /api/plan/add-task ═══
+
+Body: { task_id: string, time_start: string, time_end: string }
+  — Validate: task_id is an active Task
+  — Find today's DailyPlan
+  — If plan is locked: return 403 with message "Plan is locked"
+  — Push new entry into plan.plan array with status='pending'
+  — Return updated plan
+
+═══ STEP 4 — Dashboard page refactor (app/dashboard/page.tsx) ═══
+
+Convert to a Client Component ('use client') — time must be read in browser,
+not on server (server time = UTC, user time = IST or local).
+
+const hour = new Date().getHours()
+
+Fetch data client-side:
+  const { data: morningData } = useSWR('/api/dashboard/morning', fetcher)
+  const { data: eveningData } = useSWR('/api/dashboard/evening', fetcher)
+
+Render:
+  if (hour < 12)  → <DashboardMorning data={morningData} />
+  if (hour >= 21) → <DashboardEvening data={eveningData} />
+  else            → <DashboardMidday />
+
+═══ STEP 5 — Morning View (DashboardMorning.tsx) ═══
+
+Layout (top to bottom):
+  1. Greeting: "Good morning, [name]." + today's date
+  2. Energy forecast card (if energyForecast exists):
+     "Based on last 3 days: [low/moderate/high]"
+     "Suggestion: Start with [highest-priority pillar] task"
+  3. Today's Plan section:
+     — If no plan: single "Generate My Day" button (large, prominent)
+     — If plan exists: render time-blocked list (reuse existing DayPlan component)
+     — Always show "+ Add to Today" button below the plan
+  4. Active Challenges widget (if activeChallenges.length > 0):
+     — Show max 3 ChallengeMiniCard components
+     — "View all challenges" link → /challenges
+     — If 0 active: "No active challenges. Pick one →" link
+  5. Pillar Health Bars (PillarHealthBar component):
+     — 3 bars: Money / Soul / Curiosity
+     — Each bar: label, task count this week, fill % vs target
+     — If a pillar is below 15% of total: show ⚠ indicator
+
+═══ STEP 6 — Evening View (DashboardEvening.tsx) ═══
+
+Layout:
+  1. Greeting: "Good evening, [name]." + date
+  2. Night Check-In CTA (large, prominent):
+     — If check-in not done: "Start Check-In" button → /checkin
+     — If already done: "Check-in complete ✓" (no button)
+  3. Today's Summary card:
+     — "Completed X/Y tasks"
+     — Pillar breakdown in mini bars
+  4. Challenge Wins Today:
+     — For each challenge with a task in today's plan:
+       ✓ [title] — streak continues (if done)
+       ✗ [title] — not done yet (if pending/skipped)
+  5. Tomorrow Preview (TomorrowPreview.tsx):
+     — Top 3 tasks for tomorrow
+     — Show pillar badge + duration
+
+═══ STEP 7 — Midday View (DashboardMidday.tsx) ═══
+
+Minimal view:
+  1. Greeting (afternoon)
+  2. Today's plan (same DayPlan component)
+  3. "+ Add to Today" button always visible
+
+═══ STEP 8 — PillarHealthBar.tsx ═══
+
+Props: { pillar: 'money'|'soul'|'curiosity', count: number, target: number, total: number }
+Show: pillar icon + label, progress bar (fill = count/total as %), count display.
+Color: money=amber, soul=rose, curiosity=blue.
+If count/total < 0.15 and total > 0: show ⚠ with text "(neglected)".
+
+═══ STEP 9 — AddToTodayDrawer.tsx ═══
+
+Slide-up drawer component.
+Three tabs:
+
+  Tab 1 "From Tasks":
+    Fetch all active tasks not already in today's plan.
+    List with pillar badge + duration.
+    Tap a task → show time slot picker (simple: start time input).
+    Confirm → PATCH /api/plan/add-task → close drawer + refresh plan.
+
+  Tab 2 "From Challenges":
+    List active challenges with their linked task.
+    Same tap → time slot → add flow.
+
+  Tab 3 "Quick Add":
+    Form: title (required), duration (dropdown), pillar (3 buttons).
+    "Save to task library" checkbox (default unchecked).
+    If unchecked: creates a one-time task and adds to today only.
+    If checked: saves to master task list + adds to today.
+    Submit → POST /api/tasks (if saving) then PATCH /api/plan/add-task.
+
+═══ STEP 10 — loading.tsx skeletons ═══
+
+Create loading.tsx in: /app/dashboard, /app/tasks, /app/insights,
+/app/checkin, /app/challenges.
+Each: a dark skeleton screen matching the page layout using animate-pulse.
+Use bg-zinc-800/50 rounded blocks to suggest content.
+
+═══ ALSO FIX these existing bugs as part of this module ═══
+
+Bug A — planGenerator.ts line 74:
+  Replace: task_id: new mongoose.Types.ObjectId()  (fake ID)
+  With: store recharge entries differently — add field entry_type: 'recharge'
+  to the IPlanEntry interface, and use the actual RechargeItem._id.
+  Update DailyPlan model's plan array type to include entry_type field.
+
+Bug B — checkin/route.ts line 71:
+  Replace: RevisionQueue.findById(entry.task_id)
+  With: RevisionQueue.findOne({ task_id: entry.task_id })
+
+Explain the time-on-client vs time-on-server problem, why SWR is used for
+dashboard data instead of server fetch, and how the AddToTodayDrawer tabs
+each use different data sources.
+```
+
+---
