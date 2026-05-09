@@ -99,3 +99,15 @@
 **Notes:** Added the official SDKs `@anthropic-ai/sdk` and `@google/generative-ai`. Created `AIServiceError` to standardize provider error handling.
 
 ---
+
+### 2026-05-05 14:55 — MODULE 8 (Spaced Repetition System)
+
+**Prompt Summary:** Implement Module 8 — Spaced Repetition System
+**Module:** 8 (Spaced Repetition System)
+**Phase:** 2
+**Files Modified:** `lib/revision/revisionEngine.ts`, `lib/scheduler/contextCollector.ts`, `lib/scheduler/planGenerator.ts`, `app/api/log/checkin/route.ts`, `tests/revision/revision.test.ts`
+**Outcome:** Built a full spaced-repetition engine with [1,3,7,14]-day cycle. `onTaskCompleted` seeds RevisionQueue on first task completion. `completeRevision` advances the cycle. `buildRevisionTasksForDate` enforces a daily cap of 3, deferring overflow +1 day. Revision pseudo-tasks ("Revise: [title]") are injected into contextCollector and flow through the plan generator. Check-in route updated to properly call engine handlers.
+**AI Model Used:** Claude Sonnet 4.6 (Thinking)
+**Notes:** Used UTC midnight throughout to avoid timezone off-by-one bugs. Added alias fields (date, slots, pendingTasks, pillarBalance, energyHistory) to PlanContext so both AI prompt builder and rule-based generator share the same context without type conflicts. All 10 tests pass.
+
+---

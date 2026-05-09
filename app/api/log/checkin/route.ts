@@ -8,6 +8,7 @@ import RevisionQueue from '@/models/RevisionQueue';
 import Task from '@/models/Task';
 import { dayLogCheckinSchema } from '@/lib/validators/dayLog';
 import { buildNightInsight } from '@/lib/ai/insightBuilder';
+import { onTaskCompleted, completeRevision } from '@/lib/revision/revisionEngine';
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,47 +61,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Update Revision Queue
-    // For each completed task, check if it needs revision
+    // 3. Update Revision Queue via revisionEngine
     for (const entry of entries) {
       if (entry.status !== 'done') continue;
-      
       const task = await Task.findById(entry.task_id);
       if (!task) continue;
 
-      if (task.revision && task.revision_cycle && task.revision_cycle.length > 0) {
-        let revQueue = await RevisionQueue.findOne({ task_id: task._id });
-        const now = new Date();
-
-        if (revQueue) {
-          // If already in queue, advance cycle if today was a revision day
-          // For simplicity, we just advance the cycle regardless if it was early.
-          if (revQueue.cycle_index < task.revision_cycle.length) {
-            revQueue.revision_history.push(now);
-            const nextIntervalDays = task.revision_cycle[revQueue.cycle_index];
-            
-            const nextRev = new Date();
-            nextRev.setDate(nextRev.getDate() + nextIntervalDays);
-            
-            revQueue.next_revision = nextRev;
-            revQueue.cycle_index += 1;
-            await revQueue.save();
-          }
-        } else {
-          // First time completion, create queue entry
-          const nextIntervalDays = task.revision_cycle[0];
-          const nextRev = new Date();
-          nextRev.setDate(nextRev.getDate() + nextIntervalDays);
-
-          await RevisionQueue.create({
-            task_id: task._id,
-            original_title: task.title,
-            learned_on: now,
-            next_revision: nextRev,
-            cycle_index: 1, // Advance past first interval
-            revision_history: [now]
-          });
-        }
+      // Check if this task_id maps to a RevisionQueue item (revision pseudo-task)
+      const revQueueItem = await RevisionQueue.findById(entry.task_id);
+      if (revQueueItem) {
+        // It is a revision task — advance the cycle
+        await completeRevision(revQueueItem);
+      } else if (task.revision) {
+        // First-time completion of a revisable task — seed the queue
+        await onTaskCompleted(task);
       }
     }
 

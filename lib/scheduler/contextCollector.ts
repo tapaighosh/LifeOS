@@ -5,19 +5,24 @@ import Task, { ITask } from '@/models/Task';
 import DailyPlan from '@/models/DailyPlan';
 import DayLog from '@/models/DayLog';
 import RechargeItem, { IRechargeItem } from '@/models/RechargeItem';
-import RevisionQueue from '@/models/RevisionQueue';
+import { buildRevisionTasksForDate } from '@/lib/revision/revisionEngine';
 import { calculateAvailableSlots, TimeSlot } from './slotCalculator';
 
 export interface PlanContext {
   targetDate: string;
+  date: string;                      // alias for AI promptBuilder
   dayOfWeek: number;
   availableSlots: TimeSlot[];
+  slots: TimeSlot[];                  // alias for AI promptBuilder
   carryoverTasks: ITask[];
   todayTasks: ITask[];
-  revisionTasks: ITask[];
+  revisionTasks: Partial<ITask>[];
   rechargeMenu: IRechargeItem[];
+  pendingTasks: ITask[];             // merged list for AI promptBuilder
   energyRatings7d: number[];
+  energyHistory: number[];           // alias for AI promptBuilder
   pillarBalance7d: { money: number; soul: number; curiosity: number };
+  pillarBalance: { money: number; soul: number; curiosity: number }; // alias
 }
 
 export async function collectPlanContext(
@@ -84,18 +89,8 @@ export async function collectPlanContext(
     ]
   }).lean();
 
-  // 5. Revision queue due today
-  const revisions = await RevisionQueue.find({
-    next_review_date: { $lte: endOfDay },
-    completed: false
-  }).populate('task_id').lean();
-
-  const revisionTasks: ITask[] = [];
-  for (const rev of revisions) {
-    if (rev.task_id && (rev.task_id as any).active) {
-      revisionTasks.push(rev.task_id as any);
-    }
-  }
+  // 5. Revision queue due today (uses revisionEngine for cap + deferral)
+  const { revisionPseudoTasks: revisionTasks } = await buildRevisionTasksForDate(targetDate);
 
   // 6. Last 7 days energy ratings
   const sevenDaysAgo = new Date(startOfDay);
@@ -136,19 +131,31 @@ export async function collectPlanContext(
   // 8. Recharge menu
   const rechargeMenu = await RechargeItem.find({ active: true }).lean();
 
+  // Merge all tasks for AI promptBuilder (unique by id)
+  const pendingTaskMap = new Map<string, ITask>();
+  for (const t of [...carryoverTasks, ...todayTasks]) {
+    const id = (t as any)._id?.toString();
+    if (id) pendingTaskMap.set(id, t);
+  }
+  const pendingTasks = Array.from(pendingTaskMap.values());
+
   return {
     targetDate,
+    date: targetDate,
     dayOfWeek,
     availableSlots,
+    slots: availableSlots,
     // @ts-ignore
     carryoverTasks,
     // @ts-ignore
     todayTasks,
-    // @ts-ignore
     revisionTasks,
     // @ts-ignore
     rechargeMenu,
+    pendingTasks,
     energyRatings7d,
+    energyHistory: energyRatings7d,
     pillarBalance7d,
+    pillarBalance: pillarBalance7d,
   };
 }
