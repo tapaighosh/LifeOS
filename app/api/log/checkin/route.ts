@@ -6,6 +6,7 @@ import DayLog from '@/models/DayLog';
 import DailyPlan from '@/models/DailyPlan';
 import RevisionQueue from '@/models/RevisionQueue';
 import Task from '@/models/Task';
+import Challenge from '@/models/Challenge';
 import { dayLogCheckinSchema } from '@/lib/validators/dayLog';
 import { buildNightInsight } from '@/lib/ai/insightBuilder';
 import { onTaskCompleted, completeRevision } from '@/lib/revision/revisionEngine';
@@ -67,8 +68,9 @@ export async function POST(request: NextRequest) {
       const task = await Task.findById(entry.task_id);
       if (!task) continue;
 
-      // Check if this task_id maps to a RevisionQueue item (revision pseudo-task)
-      const revQueueItem = await RevisionQueue.findById(entry.task_id);
+      // Bug fix: use findOne({ task_id }) not findById(task_id)
+      // RevisionQueue items have their own _id; task_id is a foreign key field
+      const revQueueItem = await RevisionQueue.findOne({ task_id: entry.task_id });
       if (revQueueItem) {
         // It is a revision task — advance the cycle
         await completeRevision(revQueueItem);
@@ -116,6 +118,66 @@ export async function POST(request: NextRequest) {
     if (aiInsight) {
       dayLog.ai_insight = aiInsight;
       await dayLog.save();
+    }
+
+    // 7. Challenge progress hook
+    // Runs after DayLog is committed. This is intentionally a post-save side effect
+    // (not Mongoose middleware) so it can be tested independently.
+    for (const entry of entries) {
+      try {
+        const challenge = await Challenge.findOne({
+          linked_task_id: entry.task_id,
+          status: 'active',
+        });
+        if (!challenge) continue;
+
+        if (entry.status === 'done') {
+          const prevLastCompleted = challenge.last_completed_on;
+          challenge.total_completed += 1;
+          challenge.last_completed_on = date;
+
+          if (challenge.target_type === 'streak') {
+            if (prevLastCompleted) {
+              // Calculate calendar day gap between last completion and today
+              const prev = new Date(prevLastCompleted);
+              const today = new Date(date);
+              const msPerDay = 24 * 60 * 60 * 1000;
+              const gap = Math.round((today.getTime() - prev.getTime()) / msPerDay);
+
+              if (gap === 1) {
+                challenge.current_streak += 1;
+              } else {
+                // Gap > 1 means a day was missed — streak resets to 1 (today counts)
+                challenge.current_streak = 1;
+              }
+            } else {
+              // First ever completion
+              challenge.current_streak = 1;
+            }
+
+            if (challenge.current_streak > challenge.best_streak) {
+              challenge.best_streak = challenge.current_streak;
+            }
+          }
+
+          // Check for challenge completion
+          if (challenge.total_completed >= challenge.target_value) {
+            challenge.status = 'completed';
+          }
+
+          await challenge.save();
+        } else if (
+          (entry.status === 'skipped' || entry.status === 'partial') &&
+          challenge.target_type === 'streak'
+        ) {
+          // Both skipped and partial reset the streak (partial ≠ done for streak challenges)
+          challenge.current_streak = 0;
+          await challenge.save();
+        }
+      } catch (challengeErr) {
+        // Challenge hook errors must never break the check-in submission
+        console.error('[checkin] challenge hook error:', challengeErr);
+      }
     }
 
     return NextResponse.json({

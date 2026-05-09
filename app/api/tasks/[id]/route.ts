@@ -17,6 +17,7 @@ import mongoose from 'mongoose';
 import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import Task from '@/models/Task';
+import Challenge from '@/models/Challenge';
 import { taskUpdateSchema } from '@/lib/validators/task';
 
 interface RouteParams {
@@ -107,6 +108,19 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
     await connectDB();
 
+    // Soft-delete guard: if this task is linked to an active challenge, auto-pause it.
+    // This prevents orphaned challenges with no linked task.
+    let pausedChallenge: string | null = null;
+    const linkedChallenge = await Challenge.findOne({
+      linked_task_id: id,
+      status: 'active',
+    });
+    if (linkedChallenge) {
+      linkedChallenge.status = 'paused';
+      await linkedChallenge.save();
+      pausedChallenge = linkedChallenge.title;
+    }
+
     // Soft delete — set active=false so task history is preserved
     const deleted = await Task.findByIdAndUpdate(
       id,
@@ -122,7 +136,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json(
-      { message: 'Task deactivated', id },
+      { message: 'Task deactivated', id, paused_challenge: pausedChallenge },
       { status: 200 }
     );
   } catch (error) {

@@ -123,3 +123,37 @@
 **Notes:** Added missing `source` field in tests to fix mongoose validation errors. Used simple CSS for charts to avoid extra libraries.
 
 ---
+
+### 2026-05-09 16:38 — MODULE P2-A (Challenge System)
+
+**Prompt Summary:** Implement Module P2-A — Challenge System  
+**Module:** P2-A (Challenge System)  
+**Phase:** 2  
+**Branch:** `feature/p2a-challenge-system`  
+**Files Modified/Created:**
+- `models/Task.ts` — added `challenge_id?: ObjectId | null` field + sparse index (additive only)
+- `models/Challenge.ts` — NEW: full Challenge Mongoose model with IChallenge interface
+- `lib/challenges/library.ts` — NEW: 50-challenge static CHALLENGE_LIBRARY constant (5 categories, 3 target types)
+- `lib/validators/challenge.ts` — NEW: Zod schemas (`challengeAcceptSchema`, `challengeUpdateSchema`)
+- `app/api/challenges/route.ts` — NEW: GET active + completed challenges
+- `app/api/challenges/library/route.ts` — NEW: GET static library with `already_accepted` cross-ref
+- `app/api/challenges/accept/route.ts` — NEW: POST accept → create Task + Challenge + back-fill challenge_id
+- `app/api/challenges/[id]/route.ts` — NEW: GET detail + PATCH status/notes with side-effects
+- `app/api/log/checkin/route.ts` — MODIFIED: added Challenge progress hook (step 7), fixed RevisionQueue lookup bug (`findById` → `findOne({ task_id })`)
+- `app/api/tasks/[id]/route.ts` — MODIFIED: added soft-delete guard (auto-pauses linked active challenge)
+- `app/challenges/page.tsx` — NEW: 3-tab page (Active / Library / Completed) with category filter
+- `components/challenges/ChallengeCard.tsx` — NEW: progress bar, streak display, category colors
+- `components/challenges/ChallengeLibraryItem.tsx` — NEW: library row with Accept button / Active badge
+- `components/challenges/AcceptChallengeDrawer.tsx` — NEW: slide-up drawer with pillar + frequency selection
+- `components/challenges/ChallengeMiniCard.tsx` — NEW: compact card for dashboard widget (max 3)
+- `tests/challenges/challenges.test.ts` — NEW: 7 tests covering all spec scenarios
+
+**Outcome:** Complete Challenge System implemented. Additive-only changes to existing Task schema. Static library requires no DB migration. Challenge progress updates via post-save hook pattern (never Mongoose middleware) for testability. Fixed existing RevisionQueue lookup bug. Soft-delete guard auto-pauses linked challenges.  
+**AI Model Used:** Gemini 2.5 Pro  
+**Design Decisions:**
+- Static library constant (not DB seed) — no migrations, zero DB reads for browsing
+- Post-save hook in checkin route (not Mongoose middleware) — independently testable
+- `partial` status resets streak, same as `skipped` (only `done` maintains streak)
+- Challenge priority boost in AI prompt deferred to Module P2-C (promptBuilder.ts modification)
+- `linked_task_id` has unique sparse index — prevents one task from powering two challenges
+
