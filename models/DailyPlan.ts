@@ -9,6 +9,8 @@ export interface IPlanEntry {
   type: 'recurring' | 'one-time' | 'project' | 'recharge';
   energy_cost: 'high' | 'medium' | 'low';
   status: 'pending' | 'done' | 'partial' | 'skipped';
+  /** 'recharge' for break entries, 'task' for all real task entries */
+  entry_type?: 'task' | 'recharge';
 }
 
 export interface IDailyPlan extends Document {
@@ -32,6 +34,7 @@ const PlanEntrySchema: Schema = new Schema({
   type: { type: String, enum: ['recurring', 'one-time', 'project', 'recharge'], required: true },
   energy_cost: { type: String, enum: ['high', 'medium', 'low'], required: true },
   status: { type: String, enum: ['pending', 'done', 'partial', 'skipped'], default: 'pending' },
+  entry_type: { type: String, enum: ['task', 'recharge'], default: 'task' },
 });
 
 const DailyPlanSchema: Schema<IDailyPlan> = new Schema(
