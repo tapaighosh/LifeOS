@@ -115,14 +115,24 @@ export function generatePlan(context: PlanContext) {
   // Process Morning Slots
   const morningSlots = context.availableSlots.filter(s => s.period === 'morning');
   for (const slot of morningSlots) {
-    const recharge = context.rechargeMenu.length > 0 ? context.rechargeMenu[Math.floor(Math.random() * context.rechargeMenu.length)] : undefined;
+    // Bug Fix 2: prefer favourite recharge items
+    const favouritePool = context.rechargeMenu.filter((r) => (r as any).favourite);
+    const rechargePool = favouritePool.length > 0 ? favouritePool : context.rechargeMenu;
+    const recharge = rechargePool.length > 0
+      ? rechargePool[Math.floor(Math.random() * rechargePool.length)]
+      : undefined;
     scheduleSlot(slot, morningTasks, recharge);
   }
 
   // Process Evening Slots
   const eveningSlots = context.availableSlots.filter(s => s.period === 'evening');
   for (const slot of eveningSlots) {
-    const recharge = context.rechargeMenu.length > 0 ? context.rechargeMenu[Math.floor(Math.random() * context.rechargeMenu.length)] : undefined;
+    // Bug Fix 2: prefer favourite recharge items
+    const favouritePool = context.rechargeMenu.filter((r) => (r as any).favourite);
+    const rechargePool = favouritePool.length > 0 ? favouritePool : context.rechargeMenu;
+    const recharge = rechargePool.length > 0
+      ? rechargePool[Math.floor(Math.random() * rechargePool.length)]
+      : undefined;
     scheduleSlot(slot, eveningTasks, recharge);
   }
 
@@ -131,6 +141,45 @@ export function generatePlan(context: PlanContext) {
     if (!scheduledTaskIds.has(task._id!.toString())) {
       skippedTasks.push(task._id as mongoose.Types.ObjectId);
     }
+  }
+
+  // ─── Queue Topic Injection ────────────────────────────────────────────────
+  // Injects up to 2 learning topics per day when a pillar is neglected (<33%).
+  // Queue entries use entry_type='queue_topic' and topic_item_id (not task_id).
+  // Time slots are placeholder '00:00' — the AI promptBuilder or manual plan
+  // can assign them to actual open slots.
+  const QUEUE_TOPIC_CAP = 2;
+  let queueTopicsAdded = 0;
+  const totalPillarCompleted = Object.values(context.pillarBalance7d).reduce(
+    (sum, val) => sum + val,
+    0
+  );
+
+  for (const candidate of (context.queueCandidates ?? [])) {
+    if (queueTopicsAdded >= QUEUE_TOPIC_CAP) break;
+    if (!candidate.nextItem) continue;
+
+    // Only inject when the pillar is below 33% of recent completions
+    const pillarPct = totalPillarCompleted > 0
+      ? context.pillarBalance7d[candidate.pillar]
+      : 0;
+    if (pillarPct > 33) continue;
+
+    const prefix = candidate.queue_type === 'dsa' ? 'Solve' : 'Study';
+
+    planEntries.push({
+      time_start: '00:00',   // placeholder — AI or user assigns the real slot
+      time_end: '00:00',
+      topic_item_id: (candidate.nextItem as any)._id as mongoose.Types.ObjectId,
+      title: `${prefix}: ${candidate.nextItem.title}`,
+      pillar: candidate.pillar,
+      type: 'one-time',
+      energy_cost: 'low',
+      status: 'pending',
+      entry_type: 'queue_topic',
+    } as IPlanEntry);
+
+    queueTopicsAdded++;
   }
 
   return {

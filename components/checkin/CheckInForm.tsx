@@ -24,6 +24,8 @@ export function CheckInForm() {
     if (plan) {
       const initialEntries: Record<string, any> = {};
       plan.plan.forEach(p => {
+        // Skip queue_topic entries — handled by the queue hook, not graded here
+        if (p.entry_type === 'queue_topic' || !p.task_id) return;
         initialEntries[p.task_id.toString()] = { status: p.status === 'pending' ? 'done' : p.status };
       });
       setEntries(initialEntries);
@@ -138,16 +140,18 @@ export function CheckInForm() {
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800 pb-2">Today's Tasks</h3>
         {plan.plan.map((entry) => {
-          if (entry.type === 'recharge') return null; // We don't grade recharge breaks
-          const st = entries[entry.task_id.toString()]?.status || 'done';
+          // Skip recharge breaks and queue_topic entries (auto-processed by queue hook)
+          if (entry.type === 'recharge' || entry.entry_type === 'queue_topic' || !entry.task_id) return null;
+          const entryKey = entry.task_id.toString();
+          const st = entries[entryKey]?.status || 'done';
           return (
-            <div key={entry.task_id.toString()} className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl space-y-4 transition-all">
+            <div key={entryKey} className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl space-y-4 transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-zinc-200">{entry.title}</span>
                 <div className="flex items-center gap-2 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-                  <button type="button" onClick={() => updateEntry(entry.task_id.toString(), { status: 'done' })} className={cn("px-3 py-1 text-xs rounded-md transition-colors", st === 'done' ? "bg-emerald-500/20 text-emerald-400" : "text-zinc-500 hover:text-zinc-300")}>Done</button>
-                  <button type="button" onClick={() => updateEntry(entry.task_id.toString(), { status: 'partial' })} className={cn("px-3 py-1 text-xs rounded-md transition-colors", st === 'partial' ? "bg-amber-500/20 text-amber-400" : "text-zinc-500 hover:text-zinc-300")}>Partial</button>
-                  <button type="button" onClick={() => updateEntry(entry.task_id.toString(), { status: 'skipped' })} className={cn("px-3 py-1 text-xs rounded-md transition-colors", st === 'skipped' ? "bg-rose-500/20 text-rose-400" : "text-zinc-500 hover:text-zinc-300")}>Skip</button>
+                  <button type="button" onClick={() => updateEntry(entryKey, { status: 'done' })} className={cn("px-3 py-1 text-xs rounded-md transition-colors", st === 'done' ? "bg-emerald-500/20 text-emerald-400" : "text-zinc-500 hover:text-zinc-300")}>Done</button>
+                  <button type="button" onClick={() => updateEntry(entryKey, { status: 'partial' })} className={cn("px-3 py-1 text-xs rounded-md transition-colors", st === 'partial' ? "bg-amber-500/20 text-amber-400" : "text-zinc-500 hover:text-zinc-300")}>Partial</button>
+                  <button type="button" onClick={() => updateEntry(entryKey, { status: 'skipped' })} className={cn("px-3 py-1 text-xs rounded-md transition-colors", st === 'skipped' ? "bg-rose-500/20 text-rose-400" : "text-zinc-500 hover:text-zinc-300")}>Skip</button>
                 </div>
               </div>
 
@@ -156,7 +160,7 @@ export function CheckInForm() {
                   <label className="text-xs text-zinc-500 mb-2 block">Completion Percentage</label>
                   <div className="flex gap-2">
                     {[25, 50, 75].map(pct => (
-                      <button key={pct} type="button" onClick={() => updateEntry(entry.task_id.toString(), { completion_pct: pct })} className={cn("flex-1 py-1 border rounded text-xs", entries[entry.task_id.toString()]?.completion_pct === pct ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "border-zinc-800 text-zinc-500 hover:bg-zinc-800")}>{pct}%</button>
+                      <button key={pct} type="button" onClick={() => updateEntry(entryKey, { completion_pct: pct })} className={cn("flex-1 py-1 border rounded text-xs", entries[entryKey]?.completion_pct === pct ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "border-zinc-800 text-zinc-500 hover:bg-zinc-800")}>{pct}%</button>
                     ))}
                   </div>
                 </div>
@@ -166,8 +170,8 @@ export function CheckInForm() {
                 <div className="pt-2 border-t border-zinc-800/50">
                   <label className="text-xs text-zinc-500 mb-2 block">Reason</label>
                   <select 
-                    value={entries[entry.task_id.toString()]?.skip_reason || ''} 
-                    onChange={(e) => updateEntry(entry.task_id.toString(), { skip_reason: e.target.value })}
+                    value={entries[entryKey]?.skip_reason || ''} 
+                    onChange={(e) => updateEntry(entryKey, { skip_reason: e.target.value })}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-sm text-zinc-300"
                   >
                     <option value="" disabled>Select reason...</option>
