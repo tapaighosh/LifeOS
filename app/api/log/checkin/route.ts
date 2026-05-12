@@ -10,6 +10,7 @@ import Challenge from '@/models/Challenge';
 import { dayLogCheckinSchema } from '@/lib/validators/dayLog';
 import { buildNightInsight } from '@/lib/ai/insightBuilder';
 import { onTaskCompleted, completeRevision } from '@/lib/revision/revisionEngine';
+import { advanceQueueItem } from '@/lib/queues/queueEngine';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +49,9 @@ export async function POST(request: NextRequest) {
     if (plan) {
       let changed = false;
       for (const pEntry of plan.plan) {
-        const matchingLog = entries.find((e) => e.task_id === pEntry.task_id.toString());
+        // Skip queue_topic entries \u2014 they are handled separately by the queue hook
+        if (pEntry.entry_type === 'queue_topic' || !pEntry.task_id) continue;
+        const matchingLog = entries.find((e) => e.task_id === pEntry.task_id!.toString());
         if (matchingLog) {
           pEntry.status = matchingLog.status as any;
           changed = true;
@@ -177,6 +180,23 @@ export async function POST(request: NextRequest) {
       } catch (challengeErr) {
         // Challenge hook errors must never break the check-in submission
         console.error('[checkin] challenge hook error:', challengeErr);
+      }
+    }
+
+    // 8. Queue topic completion hook
+    // Runs after DayLog is committed. For each queue_topic entry in today's check-in,
+    // advance the queue: mark the item covered/skipped and promote the next pending item.
+    const queueEntries = (entries as any[]).filter(
+      (e) => e.entry_type === 'queue_topic'
+    );
+    for (const entry of queueEntries) {
+      try {
+        if (!entry.topic_item_id) continue;
+        const itemStatus = entry.status === 'done' ? 'covered' : 'skipped';
+        await advanceQueueItem(entry.topic_item_id.toString(), itemStatus, date);
+      } catch (queueErr) {
+        // Queue hook errors must never break the check-in submission
+        console.error('[checkin] queue hook error:', queueErr);
       }
     }
 

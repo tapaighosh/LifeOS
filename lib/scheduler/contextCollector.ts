@@ -6,6 +6,7 @@ import DailyPlan from '@/models/DailyPlan';
 import DayLog from '@/models/DayLog';
 import RechargeItem, { IRechargeItem } from '@/models/RechargeItem';
 import { buildRevisionTasksForDate } from '@/lib/revision/revisionEngine';
+import { buildQueueContextForPlan, QueueCandidate } from '@/lib/queues/queueEngine';
 import { calculateAvailableSlots, TimeSlot } from './slotCalculator';
 
 export interface PlanContext {
@@ -23,6 +24,8 @@ export interface PlanContext {
   energyHistory: number[];           // alias for AI promptBuilder
   pillarBalance7d: { money: number; soul: number; curiosity: number };
   pillarBalance: { money: number; soul: number; curiosity: number }; // alias
+  /** Active queue candidates for plan injection — one topic per pillar max */
+  queueCandidates: QueueCandidate[];
 }
 
 export async function collectPlanContext(
@@ -60,6 +63,8 @@ export async function collectPlanContext(
   for (const plan of recentPlans) {
     for (const entry of plan.plan) {
       if (entry.status === 'pending' || entry.status === 'partial') {
+        // Skip queue_topic entries — they have no task_id
+        if (entry.entry_type === 'queue_topic' || !entry.task_id) continue;
         incompleteTaskIds.add(entry.task_id.toString());
       }
     }
@@ -73,21 +78,26 @@ export async function collectPlanContext(
     .limit(3)
     .lean();
 
-  // 4. Today's recurring/one-time tasks
-  // For simplicity: match 'daily', match 'weekly' if day matches, etc.
-  // Real implementation for frequency would be more robust.
-  const frequencyMatch: string[] = ['daily'];
-  // Assuming a custom mapping, e.g. alternate, 3x_week etc. (Simplified)
-  // For 'weekly', it might trigger on a specific day. Let's just pull 'daily' and 'one-time' without strict logic for 'custom'.
-  
-  const todayTasks = await Task.find({
-    active: true,
-    $or: [
-      { type: 'recurring', frequency: { $in: frequencyMatch } },
-      { type: 'one-time' }, // In reality we'd check a due date if they had one
-      { type: 'project' }
-    ]
-  }).lean();
+  // 4. Today's recurring/one-time tasks — frequency-aware filtering
+  // Bug Fix 1: proper frequency logic instead of static ['daily'] array
+  function isTaskDueToday(task: ITask, dow: number): boolean {
+    if (!task.frequency) return task.type !== 'recurring';
+    switch (task.frequency) {
+      case 'daily': return true;
+      case 'alternate': {
+        const daysSinceCreation = Math.floor(
+          (Date.now() - new Date((task as any).createdAt).getTime()) / 86400000
+        );
+        return daysSinceCreation % 2 === 0;
+      }
+      case '3x_week': return [1, 3, 5].includes(dow); // Mon/Wed/Fri
+      case 'weekly': return dow === 1;                  // Monday
+      default: return true;                             // 'custom' — include by default
+    }
+  }
+
+  const allActiveTasks = await Task.find({ active: true }).lean();
+  const todayTasks = allActiveTasks.filter((t) => isTaskDueToday(t as ITask, dayOfWeek)) as ITask[];
 
   // 5. Revision queue due today (uses revisionEngine for cap + deferral)
   const { revisionPseudoTasks: revisionTasks } = await buildRevisionTasksForDate(targetDate);
@@ -131,11 +141,14 @@ export async function collectPlanContext(
   // 8. Recharge menu
   const rechargeMenu = await RechargeItem.find({ active: true }).lean();
 
+  // 9. Queue candidates for plan injection
+  const queueCandidates = await buildQueueContextForPlan();
+
   // Merge all tasks for AI promptBuilder (unique by id)
   const pendingTaskMap = new Map<string, ITask>();
   for (const t of [...carryoverTasks, ...todayTasks]) {
     const id = (t as any)._id?.toString();
-    if (id) pendingTaskMap.set(id, t);
+    if (id) pendingTaskMap.set(id, t as ITask);
   }
   const pendingTasks = Array.from(pendingTaskMap.values());
 
@@ -145,17 +158,15 @@ export async function collectPlanContext(
     dayOfWeek,
     availableSlots,
     slots: availableSlots,
-    // @ts-ignore
-    carryoverTasks,
-    // @ts-ignore
+    carryoverTasks: carryoverTasks as ITask[],
     todayTasks,
     revisionTasks,
-    // @ts-ignore
-    rechargeMenu,
+    rechargeMenu: rechargeMenu as IRechargeItem[],
     pendingTasks,
     energyRatings7d,
     energyHistory: energyRatings7d,
     pillarBalance7d,
     pillarBalance: pillarBalance7d,
+    queueCandidates,
   };
 }

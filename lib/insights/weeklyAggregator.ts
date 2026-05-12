@@ -1,5 +1,8 @@
 import DailyPlan from '@/models/DailyPlan';
 import DayLog from '@/models/DayLog';
+import TopicItem from '@/models/TopicItem';
+import TopicQueue from '@/models/TopicQueue';
+import { getRevisionsDue } from '@/lib/queues/queueEngine';
 
 export interface WeeklyData {
   weekStart: string;
@@ -22,6 +25,12 @@ export interface WeeklyData {
   rechargeDone: number;
   rechargeCompliance: number;
   neglectedPillars: string[];
+  queueStats: {
+    topicsCoveredThisWeek: number;
+    dsaSolvedThisWeek: number;
+    revisionsDue: number;
+    activeQueues: number;
+  };
 }
 
 function getWeekRange(anchorDate: string): { weekStart: string; weekEnd: string } {
@@ -132,6 +141,30 @@ export async function aggregateWeeklyData(anchorDate: string): Promise<WeeklyDat
     if (pillarBalance.curiosity.pct < 15) neglectedPillars.push('curiosity');
   }
 
+  // --- Queue stats ---
+  const today = new Date().toISOString().split('T')[0];
+  const [topicsCoveredThisWeek, revisionsDueItems, activeQueues] = await Promise.all([
+    TopicItem.countDocuments({ covered_on: { $gte: weekStart }, status: 'covered' }),
+    getRevisionsDue(today),
+    TopicQueue.countDocuments({ active: true }),
+  ]);
+
+  // DSA solved this week = items covered this week from DSA queues
+  const dsaQueues = await TopicQueue.find({ queue_type: 'dsa', active: true }).lean();
+  const dsaQueueIds = dsaQueues.map((q) => q._id);
+  const dsaSolvedThisWeek = await TopicItem.countDocuments({
+    queue_id: { $in: dsaQueueIds },
+    covered_on: { $gte: weekStart },
+    status: 'covered',
+  });
+
+  const queueStats = {
+    topicsCoveredThisWeek,
+    dsaSolvedThisWeek,
+    revisionsDue: revisionsDueItems.length,
+    activeQueues,
+  };
+
   return {
     weekStart,
     weekEnd,
@@ -145,5 +178,6 @@ export async function aggregateWeeklyData(anchorDate: string): Promise<WeeklyDat
     rechargeDone,
     rechargeCompliance,
     neglectedPillars,
+    queueStats,
   };
 }

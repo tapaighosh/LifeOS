@@ -3,14 +3,15 @@ import mongoose, { Schema, Document, Model, Types } from 'mongoose';
 export interface IPlanEntry {
   time_start: string;
   time_end: string;
-  task_id: Types.ObjectId;
+  task_id?: Types.ObjectId;          // undefined for queue_topic entries
+  topic_item_id?: Types.ObjectId;    // set when entry_type='queue_topic'
   title: string;
   pillar: 'money' | 'soul' | 'curiosity';
   type: 'recurring' | 'one-time' | 'project' | 'recharge';
   energy_cost: 'high' | 'medium' | 'low';
   status: 'pending' | 'done' | 'partial' | 'skipped';
-  /** 'recharge' for break entries, 'task' for all real task entries */
-  entry_type?: 'task' | 'recharge';
+  /** Distinguishes entry origin: real task, break, or learning queue topic */
+  entry_type?: 'task' | 'recharge' | 'queue_topic';
 }
 
 export interface IDailyPlan extends Document {
@@ -28,13 +29,14 @@ export interface IDailyPlan extends Document {
 const PlanEntrySchema: Schema = new Schema({
   time_start: { type: String, required: true },
   time_end: { type: String, required: true },
-  task_id: { type: Schema.Types.ObjectId, ref: 'Task', required: true },
+  task_id: { type: Schema.Types.ObjectId, ref: 'Task' },         // optional for queue_topic entries
+  topic_item_id: { type: Schema.Types.ObjectId, ref: 'TopicItem' }, // set for queue_topic entries
   title: { type: String, required: true },
   pillar: { type: String, enum: ['money', 'soul', 'curiosity'], required: true },
   type: { type: String, enum: ['recurring', 'one-time', 'project', 'recharge'], required: true },
   energy_cost: { type: String, enum: ['high', 'medium', 'low'], required: true },
   status: { type: String, enum: ['pending', 'done', 'partial', 'skipped'], default: 'pending' },
-  entry_type: { type: String, enum: ['task', 'recharge'], default: 'task' },
+  entry_type: { type: String, enum: ['task', 'recharge', 'queue_topic'], default: 'task' },
 });
 
 const DailyPlanSchema: Schema<IDailyPlan> = new Schema(

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { seedQueuesIfEmpty } from '@/lib/queues/seedQueues';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -32,8 +33,10 @@ async function dbConnect() {
       retryWrites: true,
     };
 
-    cached.promise = mongoose.connect(MONGODB_URI as string, opts).then((mongoose) => {
+    cached.promise = mongoose.connect(MONGODB_URI as string, opts).then(async (mongoose) => {
       console.log('MongoDB connected successfully');
+      // Seed topic queues on first run (idempotent)
+      await seedQueuesIfEmpty();
       return mongoose;
     }).catch(err => {
       console.error('MongoDB connection error:', err);

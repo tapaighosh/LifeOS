@@ -14,6 +14,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import Challenge from '@/models/Challenge';
+import '@/models/Task'; // Ensure Task schema is registered for populate
 
 export async function GET() {
   try {
