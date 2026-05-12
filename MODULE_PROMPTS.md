@@ -1154,3 +1154,524 @@ each use different data sources.
 ```
 
 ---
+
+
+---
+
+# LifeOS — Phase 3 Module Prompts
+
+> **Phase 3 context block** — paste this at the top of any Phase 3 conversation:
+>
+> ```
+> I'm building LifeOS — Phase 3. Phases 1 (Modules 0–10) and 2 (P2-A Challenge System,
+> P2-B Responsive Navigation, P2-C Time-Aware Dashboard) are complete.
+>
+> The codebase has: Tasks (CRUD + Mongoose), Recharge Library, User Settings,
+> Rule-based + AI Plan Generation (Claude/Gemini), Night Check-In, Event Blocks,
+> Spaced Repetition (RevisionQueue), Weekly Insights, PWA, Challenge System
+> (lib/challenges/library.ts, models/Challenge.ts), Responsive Navigation,
+> Time-Aware Dashboard (Morning/Midday/Evening), AddToTodayDrawer.
+>
+> Tech stack: Next.js 14 App Router, TypeScript, MongoDB/Mongoose, NextAuth,
+> Tailwind CSS v3, Zustand, SWR, Claude API + Gemini fallback.
+>
+> Refer to: .ai-context/architecture.md, .ai-context/project_context.md,
+> .agents/rules/production-standards.md, BRD_phase_3.md
+>
+> Follow the /module-implement workflow.
+> ```
+
+---
+
+## Module P3-A — Topic Queue System
+
+### ?? What it does
+Introduces a structured learning system using queues. 5 pre-seeded queues (Psychology, Power,
+Money, Lifestyle, DSA) surface one topic at a time into the daily plan based on pillar balance.
+Users never see all 107 topics at once — the queue feeds them gradually.
+
+### ?? What you will learn
+- Discriminator fields vs separate collections in Mongoose
+- Synthetic task injection into the plan context pipeline (entry_type approach)
+- Drag-to-reorder with bulk MongoDB update (single Promise.all operation)
+- Extending an existing check-in hook with a new entry_type branch
+- Additive PlanContext modifications without breaking the rule-based scheduler
+
+### ?? Files involved
+
+**New models:**
+- `models/TopicQueue.ts` — queue container (name, pillar, queue_type, active)
+- `models/TopicItem.ts` — individual topic/problem (status, order, notes, optional DSA fields)
+
+**New lib:**
+- `lib/queues/queueEngine.ts` — getNextPendingItem, advanceQueueItem, buildQueueContextForPlan
+- `lib/queues/seedQueues.ts` — seed data constant + DB seeder (idempotent)
+- `lib/validators/queue.ts` — Zod schemas for queue/item CRUD + reorder
+
+**New API routes:**
+- `app/api/queues/route.ts` — GET list + POST create custom queue
+- `app/api/queues/[queue_id]/route.ts` — GET detail with items (filterable by tab)
+- `app/api/queues/[queue_id]/items/route.ts` — POST add topic
+- `app/api/queues/[queue_id]/items/[item_id]/route.ts` — PATCH update item
+- `app/api/queues/[queue_id]/reorder/route.ts` — PATCH bulk reorder
+
+**Modified files:**
+- `models/DailyPlan.ts` — add entry_type 'queue_topic', optional topic_item_id, make task_id optional
+- `lib/scheduler/contextCollector.ts` — add queueCandidates to PlanContext
+- `lib/scheduler/planGenerator.ts` — inject queue topic entries when pillar < 33%
+- `lib/ai/promptBuilder.ts` — include queue candidates in morning prompt
+- `app/api/log/checkin/route.ts` — handle entry_type 'queue_topic' entries
+- `lib/insights/weeklyAggregator.ts` — add queueStats (topics/DSA this week, revisions due)
+- `components/layout/Navigation.tsx` — add Queues nav item (7th, icon: BookOpen)
+
+**New UI:**
+- `app/queues/page.tsx` — queue overview with 5 QueueCards
+- `app/queues/[queue_id]/page.tsx` — detail with 3 tabs + drag list
+- `app/queues/loading.tsx` — 5 pulse skeleton cards
+- `components/queues/QueueCard.tsx` — summary card with progress bar
+- `components/queues/QueueItemList.tsx` — @dnd-kit/sortable drag-to-reorder list
+- `components/queues/AddTopicDrawer.tsx` — slide-up drawer (title + difficulty)
+- `components/queues/TopicItemCard.tsx` — individual item (drag handle, notes, DSA fields)
+
+### ? How to verify
+```bash
+# 1. Navigate to /queues — 5 pre-seeded queues (0/9 covered, 0/30 covered, etc.)
+# 2. Tap "Psychology & Mind" — 9 items in Pending tab
+# 3. Drag to reorder items — order persists on refresh
+# 4. Generate daily plan with Curiosity pillar low — 1 queue topic appears
+# 5. Submit check-in with queue topic marked done — item shows "covered" in /queues
+# 6. [+ Add Topic] in DSA queue — new item appended at bottom of Pending list
+# 7. Weekly review page — shows topics covered this week count
+```
+
+### ?? The Prompt
+
+```
+Implement Module P3-A — Topic Queue System
+
+Follow /module-implement. Read BRD_phase_3.md for full spec.
+Read .ai-context/architecture.md for existing schema.
+
+DECISIONS (already confirmed — do not ask):
+- Synthetic entries: use entry_type='queue_topic' + topic_item_id on IPlanEntry (Option A)
+- Nav: /queues as a distinct 7th nav item (between Challenges and Check-In)
+- Seeding: DB-seeded on first run with idempotent guard (not static constant)
+- Schema: single TopicItem model with optional DSA fields
+
+IMPORTANT: This is entirely additive. Do NOT restructure any existing code.
+All changes to existing files are targeted additions only.
+
+--- STEP 1 — New Models ---
+
+models/TopicQueue.ts (collection: "topic_queues"):
+  ITopicQueue extends Document:
+    name: string required
+    pillar: 'money' | 'soul' | 'curiosity' required
+    description: string optional
+    queue_type: 'concept' | 'dsa' required
+    active: boolean default true
+    timestamps: true
+  Indexes: { active: 1 }, { pillar: 1 }
+
+models/TopicItem.ts (collection: "topic_items"):
+  ITopicItem extends Document:
+    queue_id: ObjectId ref 'TopicQueue' required
+    title: string required max 200
+    order: number required integer (sort key)
+    status: 'pending' | 'in_progress' | 'covered' | 'skipped' default 'pending'
+    covered_on: string YYYY-MM-DD optional
+    revision: boolean default false
+    next_revision: string YYYY-MM-DD optional
+    notes: string optional max 2000
+    difficulty: 'easy' | 'medium' | 'hard' required
+    // DSA only — all optional:
+    approach_notes: string
+    time_taken: number (minutes)
+    solved_without_hint: boolean
+    timestamps: true
+  Indexes: { queue_id: 1, order: 1 }, { status: 1 }, { next_revision: 1 }
+
+models/DailyPlan.ts — minimal changes:
+  1. Add 'queue_topic' to entry_type enum (IPlanEntry interface + PlanEntrySchema)
+  2. Add topic_item_id?: mongoose.Types.ObjectId to IPlanEntry interface and schema
+  3. Make task_id NOT required in PlanEntrySchema (remove required: true)
+     Rationale: queue_topic entries use topic_item_id, not task_id
+
+--- STEP 2 — Queue Engine (lib/queues/queueEngine.ts) ---
+
+export interface QueueCandidate {
+  queue_id: string
+  queue_name: string
+  pillar: 'money' | 'soul' | 'curiosity'
+  queue_type: 'concept' | 'dsa'
+  nextItem: ITopicItem | null
+}
+
+export async function getNextPendingItem(queueId: string): Promise<ITopicItem | null>
+  ? TopicItem.findOne({ queue_id: queueId, status: 'pending' }).sort({ order: 1 })
+
+export async function advanceQueueItem(
+  itemId: string,
+  status: 'covered' | 'skipped',
+  date: string
+): Promise<void>
+  1. Update item: status = status, covered_on = date (if covered)
+  2. If covered and item.revision: set next_revision = date + 7 days
+  3. Clear any existing in_progress in the same queue (findOneAndUpdate status?pending is wrong;
+     set them back... actually: do NOT reset them, just find the next after current item)
+     Correct approach:
+     - Find the item to get its queue_id
+     - TopicItem.updateMany({ queue_id, status: 'in_progress' }, { status: 'pending' })
+     - Then find next pending (lowest order) ? set status = 'in_progress'
+  Only one item per queue should be in_progress at a time.
+
+export async function buildQueueContextForPlan(): Promise<QueueCandidate[]>
+  ? const queues = await TopicQueue.find({ active: true })
+  ? For each queue:
+      first look for in_progress item; if none, look for next pending
+  ? Return only queues where nextItem != null (active, has content remaining)
+
+export async function getRevisionsDue(date: string): Promise<ITopicItem[]>
+  ? TopicItem.find({ next_revision: { $lte: date }, status: 'covered', revision: true })
+
+--- STEP 3 — Seed Data (lib/queues/seedQueues.ts) ---
+
+Create const QUEUE_SEED_DATA: Array<{
+  name: string, pillar: string, queue_type: string, description: string,
+  items: Array<{ title: string, difficulty: string }>
+}> with all 5 queues.
+
+Queue 1: Psychology & Mind | concept | curiosity
+Items: Cognitive Dissonance, Dunning-Kruger Effect, Confirmation Bias, Anchoring Bias,
+  Loss Aversion, Sunk Cost Fallacy, Availability Heuristic, Emotional Regulation,
+  Growth vs Fixed Mindset
+
+Queue 2: Power & Systems | concept | curiosity
+Items: First Principles Thinking, Second-Order Thinking, Inversion, Pareto Principle,
+  Circle of Competence, Mental Models, Feedback Loops, Game Theory Basics, Network Effects
+
+Queue 3: Money & Wealth Logic | concept | money
+Items: Compound Interest, Opportunity Cost, Time Value of Money, Diversification,
+  Asset vs Liability, Inflation Mechanics, Tax-Efficient Investing,
+  Emergency Fund Logic, Net Worth Calculation
+
+Queue 4: Lifestyle Concepts | concept | curiosity | 34 items:
+  Deep Work, Atomic Habits Principles, Sleep Hygiene, Circadian Rhythm, 80/20 Principle,
+  Mindful Eating, Active Listening, Non-Violent Communication, Body Language Basics,
+  Stoicism Basics, Ikigai Framework, Digital Minimalism, Intermittent Fasting Basics,
+  HIIT vs Steady State, Progressive Overload, Cold Exposure Benefits,
+  Breathing Techniques (Wim Hof), Journaling Methods, Gratitude Practice,
+  Meditation Types, Reading Effectively, Zettelkasten Note-Taking,
+  Energy Management vs Time Management, Social Battery Concept,
+  Conflict Resolution Styles, Emotional Intelligence Components,
+  Public Speaking Basics, Negotiation Basics, Networking Authentically,
+  Personal Brand Basics, Goal Setting (SMART vs OKR), Dopamine Detox,
+  Accountability Systems, Habit Stacking
+
+Queue 5: DSA Problems | dsa | money | 30 items difficulty easy?medium?hard:
+  Easy: Two Sum, Reverse a String, Check Palindrome, Find Maximum Element,
+    Count Occurrences, Fibonacci (iterative), FizzBuzz Logic, Array Rotation,
+    Sum of Digits, Binary Search
+  Medium: Linked List Reversal, Detect Cycle in Linked List, Valid Parentheses,
+    Merge Two Sorted Arrays, Maximum Subarray (Kadane's), Level Order Traversal,
+    Top K Frequent Elements, Valid Anagram, 3Sum, Coin Change (DP intro)
+  Hard: Longest Common Subsequence, Word Break, Number of Islands,
+    Serialize/Deserialize Binary Tree, Merge K Sorted Lists, Trapping Rain Water,
+    Minimum Window Substring, Alien Dictionary, Regular Expression Matching,
+    Sliding Window Maximum
+
+export async function seedQueuesIfEmpty(): Promise<void>
+  if (await TopicQueue.countDocuments() > 0) return  // idempotent guard
+  for (const queueData of QUEUE_SEED_DATA):
+    const queue = await TopicQueue.create({ name, pillar, queue_type, description, active: true })
+    const items = queueData.items.map((item, index) => ({
+      queue_id: queue._id, title: item.title, difficulty: item.difficulty,
+      order: index, status: 'pending'
+    }))
+    await TopicItem.insertMany(items)
+
+Call seedQueuesIfEmpty() in lib/db/mongoose.ts after successful DB connection,
+alongside existing recharge seed calls.
+
+--- STEP 4 — Validators (lib/validators/queue.ts) ---
+
+topicQueueCreateSchema:
+  name: z.string().min(1).max(100)
+  pillar: z.enum(['money', 'soul', 'curiosity'])
+  description: z.string().optional()
+  queue_type: z.enum(['concept', 'dsa'])
+
+topicItemCreateSchema:
+  title: z.string().min(1).max(200)
+  difficulty: z.enum(['easy', 'medium', 'hard'])
+
+topicItemUpdateSchema (all optional):
+  status: z.enum(['covered', 'skipped']).optional()
+  notes: z.string().max(2000).optional()
+  revision: z.boolean().optional()
+  approach_notes: z.string().optional()
+  time_taken: z.number().positive().max(300).optional()
+  solved_without_hint: z.boolean().optional()
+
+reorderSchema:
+  queue_id: z.string()
+  items: z.array(z.object({ id: z.string(), order: z.number().int().nonnegative() }))
+
+--- STEP 5 — API Routes ---
+
+GET /api/queues
+  const queues = await TopicQueue.find({ active: true })
+  For each queue: aggregate item counts by status from TopicItem
+  Return: { queues: [{ queue, progress: { covered, pending, skipped, total } }] }
+
+POST /api/queues
+  Validate topicQueueCreateSchema ? create queue ? return it
+
+GET /api/queues/[queue_id]?tab=pending|covered|skipped|all
+  Fetch queue + items filtered by tab param, sorted by order ASC
+  Return: { queue, items }
+
+POST /api/queues/[queue_id]/items
+  Validate topicItemCreateSchema
+  const last = await TopicItem.findOne({ queue_id }).sort({ order: -1 })
+  const order = last ? last.order + 1 : 0
+  Create item with status 'pending' ? return it
+
+PATCH /api/queues/[queue_id]/items/[item_id]
+  Validate topicItemUpdateSchema
+  If payload.status === 'covered' or 'skipped':
+    await advanceQueueItem(item_id, payload.status, today_date)
+    return updated item from DB
+  Else:
+    Update fields directly (notes, approach_notes, time_taken, etc.)
+    Return updated item
+
+PATCH /api/queues/[queue_id]/reorder
+  Validate reorderSchema
+  Verify none of the item IDs have status 'covered' (covered items are locked)
+  If any covered items in payload: return 400 with message
+  await Promise.all(items.map(({ id, order }) =>
+    TopicItem.updateOne({ _id: id, queue_id }, { $set: { order } })
+  ))
+  Return { updated: items.length }
+
+--- STEP 6 — Scheduler Integration ---
+
+lib/scheduler/contextCollector.ts:
+  Add to PlanContext interface:
+    queueCandidates: QueueCandidate[]
+  Import buildQueueContextForPlan from lib/queues/queueEngine
+  In collectPlanContext(): const queueCandidates = await buildQueueContextForPlan()
+  Add queueCandidates to returned context object.
+
+lib/scheduler/planGenerator.ts:
+  After finishing slot scheduling (after the skippedTasks loop), add:
+
+  const QUEUE_TOPIC_CAP = 2;
+  let queueTopicsAdded = 0;
+  const totalCompleted = Object.values(context.pillarBalance7d).reduce((a, b) => a + b, 0);
+
+  for (const candidate of context.queueCandidates) {
+    if (queueTopicsAdded >= QUEUE_TOPIC_CAP) break;
+    if (!candidate.nextItem) continue;
+    const pillarPct = totalCompleted > 0
+      ? context.pillarBalance7d[candidate.pillar]
+      : 0;
+    if (pillarPct > 33) continue; // pillar is healthy, skip injection
+
+    const duration = candidate.queue_type === 'dsa' ? 45 : 25;
+    const prefix = candidate.queue_type === 'dsa' ? 'Solve' : 'Study';
+
+    planEntries.push({
+      time_start: '00:00',  // placeholder — will be overridden by manual scheduling
+      time_end: '00:00',
+      task_id: undefined as any,  // no real task
+      topic_item_id: candidate.nextItem._id as mongoose.Types.ObjectId,
+      title: `${prefix}: ${candidate.nextItem.title}`,
+      pillar: candidate.pillar,
+      type: 'one-time',
+      energy_cost: 'low',
+      status: 'pending',
+      entry_type: 'queue_topic',
+    });
+    queueTopicsAdded++;
+  }
+
+  Note: Time slots for queue entries are placeholders. The AI prompt builder will
+  instruct Claude to properly place them within available slots.
+
+lib/ai/promptBuilder.ts:
+  Add to userPrompt string before the Rules section:
+
+  Active Topic Queues (next items to surface):
+  ${JSON.stringify(context.queueCandidates
+    .filter(q => q.nextItem)
+    .map(q => ({
+      queue: q.queue_name,
+      pillar: q.pillar,
+      type: q.queue_type,
+      next_item: q.nextItem?.title,
+      suggested_duration_min: q.queue_type === 'dsa' ? 45 : 25
+    })), null, 2)}
+
+  Add to the Rules list:
+  6. If a pillar is below 33%, include one topic from that queue's next item.
+     Use entry_type "queue_topic" and include topic_item_id in the plan entry.
+     Assign it to the morning window at an appropriate slot.
+
+--- STEP 7 — Check-In Hook ---
+
+app/api/log/checkin/route.ts — after the existing challenge progress hook, add:
+
+  // Queue topic completion
+  import { advanceQueueItem } from '@/lib/queues/queueEngine';
+
+  const queueEntries = (entries as any[]).filter(e => e.entry_type === 'queue_topic');
+  for (const entry of queueEntries) {
+    if (!entry.topic_item_id) continue;
+    const itemStatus = entry.status === 'done' ? 'covered' : 'skipped';
+    await advanceQueueItem(entry.topic_item_id.toString(), itemStatus, date);
+  }
+
+--- STEP 8 — UI Components ---
+
+app/queues/page.tsx:
+  Server component. Auth-protected.
+  Fetch GET /api/queues server-side (use fetch with cookies/session).
+  Header: "?? My Topic Queues" subtitle "One topic at a time."
+  Render QueueCard for each queue.
+  "+ New Queue" button at top-right ? opens a simple modal (name + pillar + type).
+  Empty state: "No queues yet. Create your first queue."
+
+app/queues/[queue_id]/page.tsx:
+  Client component ('use client').
+  useSWR('/api/queues/[queue_id]?tab=...') — refetch on tab change.
+  Header: queue name + progress bar + "X/Y covered" counter.
+  Three tabs: Covered ? | Pending | Skipped.
+  Pending and Skipped: render QueueItemList (draggable).
+  Covered: render plain sorted list, NO drag handle, show covered_on date.
+  Fixed bottom: "+ Add Topic" button ? AddTopicDrawer.
+  Back button ? /queues.
+
+app/queues/loading.tsx:
+  Export default function: 5 animate-pulse bg-zinc-800/50 rounded-xl cards in a flex col.
+
+components/queues/QueueCard.tsx:
+  Props: { queue: ITopicQueue, progress: { covered: number, total: number } }
+  Show: queue name (font-semibold), pillar badge (money=amber, curiosity=blue, soul=rose),
+  queue_type icon (BookOpen for concept, Code2 for DSA), progress bar,
+  "X/Y covered" text.
+  Glassmorphism card (bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-2xl).
+  Hover: slight scale + border brightens.
+  Entire card is a Link to /queues/[queue._id].
+
+components/queues/QueueItemList.tsx:
+  Props: { items: ITopicItem[], queueId: string, onItemUpdated: () => void }
+  Use @dnd-kit/core and @dnd-kit/sortable.
+  On drag end: build new order array ? PATCH /api/queues/[queueId]/reorder.
+  Render TopicItemCard for each item with useSortable.
+  Show a subtle drop indicator while dragging.
+
+components/queues/TopicItemCard.tsx:
+  Props: { item: ITopicItem, draggable?: boolean, onUpdate?: () => void }
+  Layout: [drag handle =] [difficulty badge] [title] [status icon]
+  Drag handle only visible if draggable=true.
+  Difficulty badge: easy=emerald, medium=amber, hard=rose — small pill.
+  Status icons: pending=?, in_progress=? (indigo), covered=? (green), skipped=— (zinc).
+  Expandable on click (accordion): shows notes textarea (editable), covered_on date.
+  DSA items: when expanded also show approach_notes, time_taken, solved_without_hint toggle.
+  Save button appears when notes/DSA fields are edited.
+
+components/queues/AddTopicDrawer.tsx:
+  Props: { queueId: string, queueType: 'concept'|'dsa', isOpen: boolean,
+          onClose: () => void, onAdded: () => void }
+  Slide-up drawer from bottom (translate-y-full ? translate-y-0 transition).
+  Fields: Title (text input, autofocus), Difficulty (3-button selector: Easy/Medium/Hard).
+  Submit ? POST /api/queues/[queueId]/items ? toast success ? onAdded() ? onClose().
+  Cancel button dismisses.
+
+Navigation update (components/layout/Navigation.tsx):
+  Import BookOpen from lucide-react.
+  Add to navItems array after Challenges:
+    { name: 'Queues', href: '/queues', icon: BookOpen }
+  Apply to both mobile (md:hidden) and desktop (hidden md:flex) nav sections.
+
+Insights update (lib/insights/weeklyAggregator.ts):
+  Import TopicItem.
+  Add to weekly aggregation:
+    const weekStart = sevenDaysAgoStr; // already calculated
+    topicsCoveredThisWeek = await TopicItem.countDocuments({
+      covered_on: { $gte: weekStart }, status: 'covered'
+    })
+    dsaSolvedThisWeek = count from DSA queue only
+    revisionsdue = (await getRevisionsDue(today)).length
+  Return queueStats: { topicsCoveredThisWeek, dsaSolvedThisWeek, revisionsDue }
+
+app/insights/page.tsx — add a "Queue Progress" section card:
+  "Topics covered this week: X" | "DSA solved: Y" | "Revisions due: Z"
+  Same glassmorphism card style as other insight cards.
+
+--- STEP 9 — Bug Fixes (apply alongside Phase 3) ---
+
+Fix 1 — contextCollector.ts: Replace simplified frequency logic (lines 79–90):
+
+  Add helper before collectPlanContext:
+  function isTaskDueToday(task: ITask, dayOfWeek: number): boolean {
+    if (!task.frequency) return task.type !== 'recurring';
+    switch (task.frequency) {
+      case 'daily': return true;
+      case 'alternate': {
+        const days = Math.floor((Date.now() - new Date(task.createdAt).getTime()) / 86400000);
+        return days % 2 === 0;
+      }
+      case '3x_week': return [1, 3, 5].includes(dayOfWeek); // Mon/Wed/Fri
+      case 'weekly': return dayOfWeek === 1; // Monday
+      default: return true;
+    }
+  }
+
+  Replace the Task.find with:
+  const allActiveTasks = await Task.find({ active: true }).lean();
+  const todayTasks = allActiveTasks.filter(t => isTaskDueToday(t as ITask, dayOfWeek));
+
+Fix 2 — planGenerator.ts: Favourite-first recharge selection:
+  Replace lines 118 and 125:
+  const pool = context.rechargeMenu.filter(r => r.favourite);
+  const recharge = (pool.length > 0 ? pool : context.rechargeMenu)[
+    Math.floor(Math.random() * (pool.length > 0 ? pool : context.rechargeMenu).length)
+  ];
+
+Fix 3 — contextCollector.ts: Remove @ts-ignore (3 instances):
+  Replace with type assertions:
+  carryoverTasks: carryoverTasks as ITask[],
+  todayTasks: todayTasks as ITask[],
+  rechargeMenu: rechargeMenu as IRechargeItem[],
+
+Fix 4 — promptBuilder.ts: Add "status": "pending" to AI output format:
+  In the Output Format section, update the plan entry object to include:
+  { "task_id": "...", "status": "pending", "type": "...", ... }
+
+--- STEP 10 — Tests ---
+
+Create tests/api/queues.test.ts:
+
+Test: GET /api/queues after seed ? returns 5 queues with correct totals
+Test: POST /api/queues ? custom queue created
+Test: POST /api/queues/[id]/items ? item order = maxOrder + 1, status = pending
+Test: PATCH items/[id] status=covered ? item status covered, next item in_progress
+Test: PATCH items/[id] status=covered on last item ? no next in_progress (queue empty)
+Test: PATCH reorder ? item orders updated, covered items rejected with 400
+Test: Check-in with entry_type=queue_topic + status=done ? advanceQueueItem called
+Test: buildQueueContextForPlan ? returns only queues with remaining items
+Test: seedQueuesIfEmpty ? running twice ? still only 5 queues in DB
+Test: Plan generation ? queueCandidates in context when queues exist
+
+Explain:
+- Why entry_type='queue_topic' is cleaner than creating stub tasks
+- How the one-in_progress-per-queue invariant is maintained in advanceQueueItem
+- Why covered items cannot be drag-reordered (they are history, not future)
+- How DSA completion tracking differs (approach_notes, time taken)
+- Why seedQueuesIfEmpty is idempotent and why that matters in production
+```
+
+---
