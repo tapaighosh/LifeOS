@@ -24,9 +24,13 @@ export function CheckInForm() {
     if (plan) {
       const initialEntries: Record<string, any> = {};
       plan.plan.forEach(p => {
-        // Skip queue_topic entries — handled by the queue hook, not graded here
-        if (p.entry_type === 'queue_topic' || !p.task_id) return;
-        initialEntries[p.task_id.toString()] = { status: p.status === 'pending' ? 'done' : p.status };
+        if (p.type === 'recharge') return;
+        const key = p.entry_type === 'queue_topic' ? p.topic_item_id?.toString() : p.task_id?.toString();
+        if (!key) return;
+        initialEntries[key] = { 
+          status: p.status === 'pending' ? 'done' : p.status,
+          entry_type: p.entry_type || 'task'
+        };
       });
       setEntries(initialEntries);
     }
@@ -51,8 +55,10 @@ export function CheckInForm() {
     try {
       const payload: DayLogCheckinPayload = {
         date: plan!.date,
-        entries: Object.entries(entries).map(([task_id, data]) => ({
-          task_id,
+        entries: Object.entries(entries).map(([id, data]) => ({
+          task_id: data.entry_type === 'task' ? id : undefined,
+          topic_item_id: data.entry_type === 'queue_topic' ? id : undefined,
+          entry_type: data.entry_type,
           status: data.status as any,
           completion_pct: data.status === 'partial' ? (data.completion_pct || 50) : undefined,
           skip_reason: data.status === 'skipped' ? data.skip_reason : undefined,
@@ -140,9 +146,9 @@ export function CheckInForm() {
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800 pb-2">Today's Tasks</h3>
         {plan.plan.map((entry) => {
-          // Skip recharge breaks and queue_topic entries (auto-processed by queue hook)
-          if (entry.type === 'recharge' || entry.entry_type === 'queue_topic' || !entry.task_id) return null;
-          const entryKey = entry.task_id.toString();
+          if (entry.type === 'recharge') return null;
+          const entryKey = entry.entry_type === 'queue_topic' ? entry.topic_item_id?.toString() : entry.task_id?.toString();
+          if (!entryKey) return null;
           const st = entries[entryKey]?.status || 'done';
           return (
             <div key={entryKey} className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl space-y-4 transition-all">

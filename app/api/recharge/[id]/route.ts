@@ -7,7 +7,7 @@ import RechargeItem from '@/models/RechargeItem';
 import { rechargeUpdateSchema } from '@/lib/validators/recharge';
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
@@ -17,7 +17,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid item ID', code: 'INVALID_ID' }, { status: 400 });
@@ -51,7 +51,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(updated, { status: 200 });
   } catch (error) {
-    console.error(`[PATCH /api/recharge/${params.id}]`, error);
+    console.error(`[PATCH /api/recharge/${id}]`, error);
     return NextResponse.json(
       { error: 'Failed to update recharge item', code: 'INTERNAL_ERROR' },
       { status: 500 }
@@ -66,7 +66,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid item ID', code: 'INVALID_ID' }, { status: 400 });
@@ -86,7 +86,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ message: 'Recharge item deactivated', id }, { status: 200 });
   } catch (error) {
-    console.error(`[DELETE /api/recharge/${params.id}]`, error);
+    console.error(`[DELETE /api/recharge/${id}]`, error);
     return NextResponse.json(
       { error: 'Failed to delete recharge item', code: 'INTERNAL_ERROR' },
       { status: 500 }
