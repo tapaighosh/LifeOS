@@ -68,8 +68,16 @@ export async function POST(request: NextRequest) {
     // 3. Update Revision Queue via revisionEngine
     for (const entry of entries) {
       if (entry.status !== 'done') continue;
+      if (entry.entry_type === 'queue_topic') continue;
+      
       const task = await Task.findById(entry.task_id);
       if (!task) continue;
+
+      // Deactivate one-time tasks upon completion
+      if (task.type === 'one-time') {
+        task.active = false;
+        await task.save();
+      }
 
       // Bug fix: use findOne({ task_id }) not findById(task_id)
       // RevisionQueue items have their own _id; task_id is a foreign key field
@@ -128,6 +136,8 @@ export async function POST(request: NextRequest) {
     // (not Mongoose middleware) so it can be tested independently.
     for (const entry of entries) {
       try {
+        if (entry.entry_type === 'queue_topic') continue;
+
         const challenge = await Challenge.findOne({
           linked_task_id: entry.task_id,
           status: 'active',

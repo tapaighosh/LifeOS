@@ -1,7 +1,9 @@
 import mongoose, { Schema, Document, Model, Types } from 'mongoose';
 
 export interface ILogEntry {
-  task_id: Types.ObjectId;
+  task_id?: Types.ObjectId;
+  topic_item_id?: Types.ObjectId;
+  entry_type?: 'task' | 'queue_topic';
   status: 'done' | 'partial' | 'skipped';
   completion_pct?: number; // 25, 50, 75
   skip_reason?: string; // 'tired', 'no time', 'forgot', 'spontaneous'
@@ -18,7 +20,9 @@ export interface IDayLog extends Document {
 }
 
 const LogEntrySchema: Schema = new Schema({
-  task_id: { type: Schema.Types.ObjectId, ref: 'Task', required: true },
+  task_id: { type: Schema.Types.ObjectId, ref: 'Task' },
+  topic_item_id: { type: Schema.Types.ObjectId, ref: 'TopicItem' },
+  entry_type: { type: String, enum: ['task', 'queue_topic'], default: 'task' },
   status: { type: String, enum: ['done', 'partial', 'skipped'], required: true },
   completion_pct: { type: Number, enum: [25, 50, 75] },
   skip_reason: { type: String },

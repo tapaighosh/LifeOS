@@ -21,7 +21,7 @@ import Challenge from '@/models/Challenge';
 import { taskUpdateSchema } from '@/lib/validators/task';
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // ─── PATCH /api/tasks/[id] ────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Validate ObjectId format before hitting the DB
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -97,7 +97,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
