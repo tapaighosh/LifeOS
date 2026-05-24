@@ -5,13 +5,14 @@ import { connectDB } from '@/lib/db';
 import DayLog from '@/models/DayLog';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ date: string }> }) {
+  let date = 'unknown';
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 });
     }
 
-    const { date } = await params;
+    date = (await params).date;
 
     await connectDB();
 
