@@ -2,12 +2,12 @@ import { z } from 'zod';
 
 export const rechargeCreateSchema = z.object({
   title: z
-    .string({ required_error: 'Title is required' })
+    .string()
     .min(1, 'Title cannot be empty')
     .max(100, 'Title cannot exceed 100 characters')
     .trim(),
   duration: z
-    .number({ invalid_type_error: 'Duration must be a number' })
+    .number({ error: 'Duration must be a number' })
     .min(5, 'Duration must be at least 5 minutes')
     .max(15, 'Duration must be 15 minutes or less'),
   favourite: z.boolean().default(false),

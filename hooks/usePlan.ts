@@ -1,13 +1,29 @@
 import useSWR from 'swr';
 import { useCallback } from 'react';
-import type { IDailyPlan, IPlanEntry } from '@/models/DailyPlan';
+import type { IPlanEntry } from '@/models/DailyPlan';
 
 const API_TODAY = '/api/plan/today';
 const API_GENERATE = '/api/plan/generate';
 const API_REORDER = '/api/plan/reorder';
 const API_LOCK = '/api/plan/lock';
 
-async function fetcher(url: string): Promise<IDailyPlan | null> {
+/**
+ * Plain data shape returned by the API (serialised JSON — not a Mongoose document).
+ * Using a separate plain interface avoids Mongoose-vs-SWR type conflicts.
+ */
+export interface PlanData {
+  _id: string;
+  date: string;
+  plan: IPlanEntry[];
+  locked: boolean;
+  paused: boolean;
+  source: 'ai' | 'rule-based';
+  ai_note?: string;
+  skipped_tasks?: string[];
+  [key: string]: unknown;
+}
+
+async function fetcher(url: string): Promise<PlanData | null> {
   const res = await fetch(url);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -17,7 +33,7 @@ async function fetcher(url: string): Promise<IDailyPlan | null> {
 }
 
 export function usePlan() {
-  const { data: plan, error, isLoading, mutate } = useSWR<IDailyPlan | null>(API_TODAY, fetcher, {
+  const { data: plan, error, isLoading, mutate } = useSWR<PlanData | null>(API_TODAY, fetcher, {
     revalidateOnFocus: false,
   });
 

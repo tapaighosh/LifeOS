@@ -44,6 +44,7 @@ Rules:
 6. If a pillar is below 33%, include one topic from that queue's next item.
    Use entry_type "queue_topic", include topic_item_id (from the queue list above),
    and do NOT set task_id for these entries. Assign a morning time slot.
+7. Ensure the difference between time_start and time_end EXACTLY matches the task's provided 'duration' in minutes. For queue_topic entries, use the 'suggested_duration_min'.
 
 Output Format (Strict JSON):
 {

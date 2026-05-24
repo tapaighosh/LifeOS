@@ -13,7 +13,7 @@ const SKIP_REASONS = ['tired', 'no time', 'forgot', 'spontaneous'];
 export function CheckInForm() {
   const { plan, isLoading } = usePlan();
   
-  const [entries, setEntries] = useState<Record<string, { status: string, completion_pct?: number, skip_reason?: string }>>({});
+  const [entries, setEntries] = useState<Record<string, { status: string; completion_pct?: number; skip_reason?: string; entry_type?: string }>>({});
   const [energyRating, setEnergyRating] = useState<number | null>(null);
   const [reflection, setReflection] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -58,8 +58,8 @@ export function CheckInForm() {
         entries: Object.entries(entries).map(([id, data]) => ({
           task_id: data.entry_type === 'task' ? id : undefined,
           topic_item_id: data.entry_type === 'queue_topic' ? id : undefined,
-          entry_type: data.entry_type,
-          status: data.status as any,
+          entry_type: (data.entry_type || 'task') as 'task' | 'queue_topic',
+          status: data.status as 'done' | 'partial' | 'skipped',
           completion_pct: data.status === 'partial' ? (data.completion_pct || 50) : undefined,
           skip_reason: data.status === 'skipped' ? data.skip_reason : undefined,
         })),
