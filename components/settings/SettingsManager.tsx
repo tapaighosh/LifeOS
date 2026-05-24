@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Loader2, Settings, Clock, Bell, Globe, Target } from 'lucide-react';
 import type { SettingsUpdate } from '@/lib/validators/settings';
 import { cn } from '@/lib/utils';
+import { NotificationToggle } from '@/components/notifications/NotificationBanner';
 
 const TIMEZONES = [
   'UTC',
@@ -274,6 +275,19 @@ export function SettingsManager() {
                   <option key={tz} value={tz}>{tz}</option>
                 ))}
               </select>
+            </div>
+          </section>
+
+          {/* Push Notification Toggle */}
+          <section className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/60 space-y-4">
+            <h3 className="text-sm font-semibold tracking-wide text-zinc-300 flex items-center gap-2 border-b border-zinc-800 pb-3">
+              <Bell className="h-4 w-4" /> Push Notifications
+            </h3>
+            <div className="pt-2 space-y-2">
+              <p className="text-xs text-zinc-400">
+                Receive push reminders at your configured times — even when LifeOS isn’t open.
+              </p>
+              <NotificationToggle />
             </div>
           </section>
         </div>

@@ -1,5 +1,15 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+export interface PushSubscriptionKeys {
+  p256dh: string;
+  auth: string;
+}
+
+export interface StoredPushSubscription {
+  endpoint: string;
+  keys: PushSubscriptionKeys;
+}
+
 export interface IUserSettings extends Document {
   wake_time: string;
   sleep_time: string;
@@ -14,6 +24,8 @@ export interface IUserSettings extends Document {
     curiosity: number;
   };
   days_off: number[];
+  /** Web Push API subscription — optional, set when user enables notifications */
+  push_subscription?: StoredPushSubscription;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,6 +61,18 @@ const UserSettingsSchema: Schema<IUserSettings> = new Schema(
         },
         message: 'Days off must be integers between 0 and 6.',
       },
+    },
+    // Web Push subscription — stored as nested object, optional
+    push_subscription: {
+      type: {
+        endpoint: { type: String },
+        keys: {
+          p256dh: { type: String },
+          auth: { type: String },
+        },
+      },
+      required: false,
+      default: undefined,
     },
   },
   {
