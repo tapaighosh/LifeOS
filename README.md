@@ -44,17 +44,21 @@ This project is built incrementally using step-by-step module prompts. **Run one
 
 | # | Module | Phase | Status |
 |---|--------|-------|--------|
-| 0 | Project Setup & Scaffolding | Phase 1 | ⬜ Not Started |
-| 1 | Task CRUD & Master List | Phase 1 | ⬜ Not Started |
-| 2 | Recharge Library | Phase 1 | ⬜ Not Started |
-| 3 | User Settings & Preferences | Phase 1 | ⬜ Not Started |
-| 4 | Daily Plan Generation (Rule-Based) | Phase 2 | ⬜ Not Started |
-| 5 | Night Check-In Flow | Phase 2 | ⬜ Not Started |
-| 6 | Event Blocks & Calendar | Phase 2 | ⬜ Not Started |
-| 7 | AI Integration (Claude/Gemini) | Phase 3 | ⬜ Not Started |
-| 8 | Spaced Repetition System | Phase 4 | ⬜ Not Started |
-| 9 | Weekly Review & Insights | Phase 4 | ⬜ Not Started |
-| 10 | PWA, Notifications & Deploy | Phase 5 | ⬜ Not Started |
+| 0 | Project Setup & Scaffolding | Phase 1 | ✅ Completed |
+| 1 | Task CRUD & Master List | Phase 1 | ✅ Completed |
+| 2 | Recharge Library | Phase 1 | ✅ Completed |
+| 3 | User Settings & Preferences | Phase 1 | ✅ Completed |
+| 4 | Daily Plan Generation (Rule-Based) | Phase 1 | ✅ Completed |
+| 5 | Night Check-In Flow | Phase 1 | ✅ Completed |
+| 6 | Event Blocks & Calendar | Phase 1 | ✅ Completed |
+| 7 | AI Integration (Claude/Gemini) | Phase 1 | ✅ Completed |
+| 8 | Spaced Repetition System | Phase 1 | ✅ Completed |
+| 9 | Weekly Review & Insights | Phase 1 | ✅ Completed |
+| 10 | PWA, Notifications & Deploy | Phase 1 | ⬜ Not Started |
+| P2-A | Challenge System | Phase 2 | ✅ Completed |
+| P2-B | Responsive Navigation | Phase 2 | ✅ Completed |
+| P2-C | Time-Aware Dashboard | Phase 2 | ✅ Completed |
+| P3-A | Topic Queue System | Phase 3 | ✅ Completed |
 
 ---
 

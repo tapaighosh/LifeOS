@@ -1,0 +1,58 @@
+import mongoose from 'mongoose';
+import { seedQueuesIfEmpty } from '@/lib/queues/seedQueues';
+
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+}
+
+/**
+ * Global is used here to maintain a cached connection across hot reloads
+ * in development. This prevents connections growing exponentially
+ * during API Route usage.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cached = (global as any).mongoose;
+
+if (!cached) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cached = (global as any).mongoose = { conn: null, promise: null };
+}
+
+async function dbConnect() {
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    const opts = {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 10000,
+      tls: true,
+      retryWrites: true,
+    };
+
+    cached.promise = mongoose.connect(MONGODB_URI as string, opts).then(async (mongoose) => {
+      console.log('MongoDB connected successfully');
+      // Seed topic queues on first run (idempotent)
+      await seedQueuesIfEmpty();
+      return mongoose;
+    }).catch(err => {
+      console.error('MongoDB connection error:', err);
+      cached.promise = null;
+      throw err;
+    });
+  }
+
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
+
+  return cached.conn;
+}
+
+export default dbConnect;
