@@ -26,8 +26,8 @@ const pwaConfig = withPWA({
   buildExcludes: [/middleware-manifest\.json$/],
   runtimeCaching: [
     {
-      // Cache all API responses with network-first strategy
-      urlPattern: /^https?:\/\/.*\/api\/.*/,
+      // Cache all API responses with network-first strategy (excluding auth routes)
+      urlPattern: /^https?:\/\/.*\/api\/(?!auth\/).*/,
       handler: 'NetworkFirst',
       options: {
         cacheName: 'api-cache',
@@ -51,8 +51,8 @@ const pwaConfig = withPWA({
       },
     },
     {
-      // Cache all pages
-      urlPattern: /^https?:\/\/.*/,
+      // Cache all pages (excluding API routes)
+      urlPattern: /^https?:\/\/.*?\/(?!api\/).*/,
       handler: 'NetworkFirst',
       options: {
         cacheName: 'pages-cache',

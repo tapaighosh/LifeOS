@@ -21,6 +21,6 @@ export const config = {
      * - sw.js, sw-push.js   (service workers — must be publicly accessible)
      * - /                   (login/landing page)
      */
-    '/((?!api/auth|api/notifications/morning|api/notifications/night|_next/static|_next/image|favicon\\.ico|icons/|manifest\\.json|sw.*\\.js|$).*)',
+    '/((?!api/auth|api/notifications/morning|api/notifications/night|_next/static|_next/image|favicon.ico|icons|manifest.json|sw.js|sw-push.js|$).*)',
   ],
 };
