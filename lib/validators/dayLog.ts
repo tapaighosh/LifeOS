@@ -5,7 +5,7 @@ export const dayLogEntrySchema = z.object({
   topic_item_id: z.string().optional(),
   entry_type: z.enum(['task', 'queue_topic']).optional().default('task'),
   status: z.enum(['done', 'partial', 'skipped']),
-  completion_pct: z.enum([25, 50, 75] as const).optional().or(z.number().refine(n => [25, 50, 75].includes(n))),
+  completion_pct: z.union([z.literal(25), z.literal(50), z.literal(75)]).optional().or(z.number().refine(n => [25, 50, 75].includes(n))),
   skip_reason: z.string().optional(),
 });
 

@@ -19,29 +19,27 @@ import { z } from 'zod';
 const ALLOWED_DURATIONS = [15, 30, 45, 60, 90, 120] as const;
 
 const PillarEnum = z.enum(['money', 'soul', 'curiosity'], {
-  errorMap: () => ({ message: 'Pillar must be one of: money, soul, curiosity' }),
+  message: 'Pillar must be one of: money, soul, curiosity',
 });
 
 const TypeEnum = z.enum(['recurring', 'one-time', 'project', 'recharge'], {
-  errorMap: () => ({ message: 'Type must be one of: recurring, one-time, project, recharge' }),
+  message: 'Type must be one of: recurring, one-time, project, recharge',
 });
 
 const EnergyCostEnum = z.enum(['high', 'medium', 'low'], {
-  errorMap: () => ({ message: 'Energy cost must be one of: high, medium, low' }),
+  message: 'Energy cost must be one of: high, medium, low',
 });
 
 const SlotPreferenceEnum = z.enum(['morning', 'evening', 'any'], {
-  errorMap: () => ({ message: 'Slot preference must be one of: morning, evening, any' }),
+  message: 'Slot preference must be one of: morning, evening, any',
 });
 
 const FrequencyEnum = z.enum(['daily', 'alternate', '3x_week', 'weekly', 'custom'], {
-  errorMap: () => ({
-    message: 'Frequency must be one of: daily, alternate, 3x_week, weekly, custom',
-  }),
+  message: 'Frequency must be one of: daily, alternate, 3x_week, weekly, custom',
 });
 
 const DurationSchema = z
-  .number({ invalid_type_error: 'Duration must be a number' })
+  .number({ message: 'Duration must be a number' })
   .refine((d) => (ALLOWED_DURATIONS as readonly number[]).includes(d), {
     message: 'Duration must be one of: 15, 30, 45, 60, 90, 120 minutes',
   });
@@ -56,7 +54,7 @@ const DurationSchema = z
 function applyRechargeRule<T extends { type?: string; duration?: number }>(
   schema: z.ZodType<T>
 ) {
-  return (schema as z.ZodEffects<z.ZodType<T>> | z.ZodType<T>).superRefine
+  return (schema as any).superRefine
     ? schema
     : schema;
 }
@@ -76,7 +74,7 @@ const rechargeRefinement = (data: { type?: string; duration?: number }, ctx: z.R
 export const taskCreateSchema = z
   .object({
     title: z
-      .string({ required_error: 'Title is required' })
+      .string({ message: 'Title is required' })
       .min(1, 'Title cannot be empty')
       .max(200, 'Title cannot exceed 200 characters')
       .trim(),

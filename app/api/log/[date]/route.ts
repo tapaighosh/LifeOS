@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json(log, { status: 200 });
   } catch (error) {
-    console.error(`[GET /api/log/${date}]`, error);
+    console.error('[GET /api/log/[date]]', error);
     return NextResponse.json(
       { error: 'Failed to fetch day log', code: 'INTERNAL_ERROR' },
       { status: 500 }

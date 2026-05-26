@@ -66,7 +66,7 @@ describe('Module 4 — Daily Plan Generation', () => {
         { _id: new mongoose.Types.ObjectId(), title: 'High priority Low energy', priority: 5, energy_cost: 'low', duration: 30, pillar: 'money', type: 'recurring' },
       ] as unknown as ITask[];
 
-      const context = {
+      const context: any = {
         targetDate: '2026-05-02',
         dayOfWeek: 6,
         availableSlots: slots,
@@ -104,7 +104,7 @@ describe('Module 4 — Daily Plan Generation', () => {
         { _id: new mongoose.Types.ObjectId(), title: 'Nap', duration: 15, favourite: true }
       ] as unknown as IRechargeItem[];
 
-      const context = {
+      const context: any = {
         targetDate: '2026-05-02',
         dayOfWeek: 6,
         availableSlots: slots,
@@ -137,7 +137,7 @@ describe('Module 4 — Daily Plan Generation', () => {
         { _id: new mongoose.Types.ObjectId(), title: 'Does not fit', priority: 1, energy_cost: 'low', duration: 30, pillar: 'money', type: 'recurring' },
       ] as unknown as ITask[];
 
-      const context = {
+      const context: any = {
         targetDate: '2026-05-02',
         dayOfWeek: 6,
         availableSlots: slots,

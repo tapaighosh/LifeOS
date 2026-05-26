@@ -77,7 +77,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(updated, { status: 200 });
   } catch (error) {
-    console.error(`[PATCH /api/tasks/${params.id}]`, error);
+    console.error('[PATCH /api/tasks/[id]]', error);
     return NextResponse.json(
       { error: 'Failed to update task', code: 'INTERNAL_ERROR' },
       { status: 500 }
@@ -140,7 +140,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       { status: 200 }
     );
   } catch (error) {
-    console.error(`[DELETE /api/tasks/${params.id}]`, error);
+    console.error('[DELETE /api/tasks/[id]]', error);
     return NextResponse.json(
       { error: 'Failed to delete task', code: 'INTERNAL_ERROR' },
       { status: 500 }

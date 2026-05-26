@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const task = await Task.create(parseResult.data);
+    const task = await Task.create(parseResult.data as any);
 
     return NextResponse.json(task.toObject(), { status: 201 });
   } catch (error) {

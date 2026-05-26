@@ -49,7 +49,7 @@ export function DayPlan() {
   };
 
   const onDrop = async (idx: number) => {
-    if (plan?.locked || draggedIdx === null || draggedIdx === idx) return;
+    if (!plan || plan.locked || draggedIdx === null || draggedIdx === idx) return;
 
     const newPlan = [...plan.plan];
     const [draggedItem] = newPlan.splice(draggedIdx, 1);
@@ -138,7 +138,7 @@ export function DayPlan() {
 
       {/* Plan List */}
       <div className="space-y-3">
-        {plan.plan.map((entry, idx) => (
+        {plan.plan?.map((entry, idx) => (
           <div
             key={`${entry.task_id}-${idx}`}
             draggable={!plan.locked}

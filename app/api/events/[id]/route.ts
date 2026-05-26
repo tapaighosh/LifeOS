@@ -17,7 +17,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
-    console.error(`[DELETE /api/events/${id}]`, error);
+    console.error('[DELETE /api/events/[id]]', error);
     return NextResponse.json({ error: 'Failed to delete event' }, { status: 500 });
   }
 }

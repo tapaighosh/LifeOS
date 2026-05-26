@@ -9,7 +9,7 @@ import { Loader2, Sparkles, Lock, Unlock, PauseCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function DashboardClient() {
-  const { planData, isLoading, generatePlan, updatePlan } = usePlan();
+  const { plan: planData, isLoading, generatePlan, reorderPlan, lockPlan } = usePlan();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export function DashboardClient() {
     try {
       setIsGenerating(true);
       setError(null);
-      await generatePlan();
+      await generatePlan(new Date().toLocaleDateString('en-CA'));
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -29,7 +29,7 @@ export function DashboardClient() {
   const handleReorder = async (newPlanList: any[]) => {
     // Only save order, don't recalculate times for now
     try {
-      await updatePlan({ plan: newPlanList });
+      await reorderPlan(planData!.date, newPlanList);
     } catch (err) {
       console.error('Failed to save order');
     }
@@ -39,7 +39,7 @@ export function DashboardClient() {
     if (!planData) return;
     try {
       setIsUpdating(true);
-      await updatePlan({ locked: !planData.locked });
+      await lockPlan(planData!.date, !planData.locked);
     } catch (err) {
       console.error('Failed to toggle lock');
     } finally {
@@ -51,7 +51,7 @@ export function DashboardClient() {
     if (!planData) return;
     try {
       setIsUpdating(true);
-      await updatePlan({ paused: true, locked: true });
+      await lockPlan(planData!.date, true);
     } catch (err) {
       console.error('Failed to pause plan');
     } finally {
@@ -90,7 +90,7 @@ export function DashboardClient() {
               On a Tour?
             </Button>
             <Button 
-              variant={planData.locked ? 'outline' : 'primary'}
+              variant={planData.locked ? 'outline' : 'default'}
               size="sm" 
               onClick={toggleLock}
               disabled={isUpdating}
@@ -133,7 +133,7 @@ export function DashboardClient() {
           <p className="text-rose-400/80 max-w-md mx-auto mb-6">
             You marked today as a day off or tour. Have a great time!
           </p>
-          <Button variant="outline" onClick={() => updatePlan({ paused: false })}>
+          <Button variant="outline" onClick={() => lockPlan(planData!.date, false)}>
             Resume Plan
           </Button>
         </div>
@@ -165,11 +165,7 @@ export function DashboardClient() {
               </div>
             )}
 
-            <DayPlan 
-              plan={planData.plan} 
-              isLocked={planData.locked} 
-              onReorder={handleReorder} 
-            />
+            <DayPlan />
           </div>
         </>
       )}
