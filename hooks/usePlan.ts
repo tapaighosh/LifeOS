@@ -56,7 +56,7 @@ export function usePlan() {
 
   const reorderPlan = useCallback(async (date: string, newPlan: IPlanEntry[]) => {
     // Optimistic update
-    mutate((prev) => prev ? { ...prev, plan: newPlan } : prev, false);
+    mutate((prev) => prev ? { ...prev, plan: newPlan } as PlanData : prev, false);
 
     const res = await fetch(API_REORDER, {
       method: 'PATCH',
@@ -72,7 +72,7 @@ export function usePlan() {
   }, [mutate]);
 
   const lockPlan = useCallback(async (date: string, locked: boolean) => {
-    mutate((prev) => prev ? { ...prev, locked } : prev, false);
+    mutate((prev) => prev ? { ...prev, locked } as PlanData : prev, false);
 
     const res = await fetch(API_LOCK, {
       method: 'PATCH',

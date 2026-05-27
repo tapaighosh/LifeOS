@@ -13,7 +13,7 @@ const SKIP_REASONS = ['tired', 'no time', 'forgot', 'spontaneous'];
 export function CheckInForm() {
   const { plan, isLoading } = usePlan();
   
-  const [entries, setEntries] = useState<Record<string, { status: string; completion_pct?: number; skip_reason?: string; entry_type?: string }>>({});
+  const [entries, setEntries] = useState<Record<string, { status: string, completion_pct?: number, skip_reason?: string, entry_type?: string }>>({});
   const [energyRating, setEnergyRating] = useState<number | null>(null);
   const [reflection, setReflection] = useState('');
   const [submitting, setSubmitting] = useState(false);

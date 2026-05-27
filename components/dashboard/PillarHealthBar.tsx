@@ -41,7 +41,7 @@ export default function PillarHealthBar({ pillar, count, target, total }: Props)
           {count} task{count !== 1 ? 's' : ''}
         </span>
         {neglected && (
-          <AlertTriangle className="h-3 w-3 text-amber-400" aria-label="Neglected pillar" />
+          <span title="Neglected pillar"><AlertTriangle className="h-3 w-3 text-amber-400" /></span>
         )}
       </div>
     </div>

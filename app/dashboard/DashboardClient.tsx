@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { usePlan } from '@/hooks/usePlan';
 import { DayPlan } from '@/components/plan/DayPlan';
+import { NowPlaying } from '@/components/plan/NowPlaying';
 import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
 import { Loader2, Sparkles, Lock, Unlock, PauseCircle } from 'lucide-react';
 
 export function DashboardClient() {
@@ -18,9 +20,9 @@ export function DashboardClient() {
     try {
       setIsGenerating(true);
       setError(null);
-      await generatePlan(today);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to generate plan');
+      await generatePlan(new Date().toLocaleDateString('en-CA'));
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setIsGenerating(false);
     }
@@ -28,7 +30,7 @@ export function DashboardClient() {
 
   const handleReorder = async (newPlanList: Parameters<typeof reorderPlan>[1]) => {
     try {
-      await reorderPlan(today, newPlanList);
+      await reorderPlan(planData!.date, newPlanList);
     } catch (err) {
       console.error('Failed to save order', err);
     }
@@ -38,9 +40,21 @@ export function DashboardClient() {
     if (!planData) return;
     try {
       setIsUpdating(true);
-      await lockPlan(today, !planData.locked);
+      await lockPlan(planData!.date, !planData.locked);
     } catch (err) {
-      console.error('Failed to toggle lock', err);
+      console.error('Failed to toggle lock');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleTour = async () => {
+    if (!planData) return;
+    try {
+      setIsUpdating(true);
+      await lockPlan(planData!.date, true);
+    } catch (err) {
+      console.error('Failed to pause plan');
     } finally {
       setIsUpdating(false);
     }
@@ -123,7 +137,7 @@ export function DashboardClient() {
           <p className="text-rose-400/80 max-w-md mx-auto mb-6">
             You marked today as a day off or tour. Have a great time!
           </p>
-          <Button variant="outline" onClick={() => lockPlan(today, false)}>
+          <Button variant="outline" onClick={() => lockPlan(planData!.date, false)}>
             Resume Plan
           </Button>
         </div>
@@ -131,7 +145,33 @@ export function DashboardClient() {
 
       {/* State: Plan Active */}
       {planData && !planData.paused && (
-        <DayPlan />
+        <>
+          <NowPlaying plan={planData.plan} />
+
+          <div className={cn(
+            "rounded-2xl border bg-zinc-900/50 p-6 transition-all",
+            planData.locked ? "border-zinc-800" : "border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+          )}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                Today's Schedule
+                {planData.locked && <Lock className="h-4 w-4 text-zinc-500" />}
+              </h3>
+              <div className="text-xs px-2 py-1 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700">
+                {planData.source === 'ai' ? '✨ AI Generated' : '⚙️ Rule-Based'}
+              </div>
+            </div>
+
+            {planData.ai_note && (
+              <div className="mb-6 p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-sm text-indigo-300/90 leading-relaxed">
+                <span className="font-bold text-indigo-400 mr-2">Insight:</span>
+                {planData.ai_note}
+              </div>
+            )}
+
+            <DayPlan />
+          </div>
+        </>
       )}
     </div>
   );

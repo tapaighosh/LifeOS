@@ -55,9 +55,15 @@ export async function collectPlanContext(
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
   const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
 
-  const recentPlans = await DailyPlan.find({
-    date: { $gte: threeDaysAgoStr, $lt: targetDate },
+  const sevenDaysAgo = new Date(startOfDay);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+
+  const weekPlans = await DailyPlan.find({
+    date: { $gte: sevenDaysAgoStr, $lt: targetDate },
   }).lean();
+
+  const recentPlans = weekPlans.filter(p => p.date >= threeDaysAgoStr);
 
   const incompleteTaskIds = new Set<string>();
   for (const plan of recentPlans) {
@@ -85,8 +91,9 @@ export async function collectPlanContext(
     switch (task.frequency) {
       case 'daily': return true;
       case 'alternate': {
+        const targetTime = new Date(targetDate).getTime();
         const daysSinceCreation = Math.floor(
-          (Date.now() - new Date((task as any).createdAt).getTime()) / 86400000
+          (targetTime - new Date((task as any).createdAt).getTime()) / 86400000
         );
         return daysSinceCreation % 2 === 0;
       }
@@ -103,10 +110,6 @@ export async function collectPlanContext(
   const { revisionPseudoTasks: revisionTasks } = await buildRevisionTasksForDate(targetDate);
 
   // 6. Last 7 days energy ratings
-  const sevenDaysAgo = new Date(startOfDay);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
-
   const dayLogs = await DayLog.find({
     date: { $gte: sevenDaysAgoStr, $lt: targetDate }
   }).lean();
@@ -116,10 +119,6 @@ export async function collectPlanContext(
   let moneyCompleted = 0;
   let soulCompleted = 0;
   let curiosityCompleted = 0;
-
-  const weekPlans = await DailyPlan.find({
-    date: { $gte: sevenDaysAgoStr, $lt: targetDate },
-  }).lean();
 
   for (const plan of weekPlans) {
     for (const entry of plan.plan) {
