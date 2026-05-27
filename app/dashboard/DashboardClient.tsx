@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { usePlan } from '@/hooks/usePlan';
 import { DayPlan } from '@/components/plan/DayPlan';
+import { NowPlaying } from '@/components/plan/NowPlaying';
 import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
 import { Loader2, Sparkles, Lock, Unlock, PauseCircle } from 'lucide-react';
 
 export function DashboardClient() {
-  const { plan: planData, isLoading, generatePlan, reorderPlan, lockPlan } = usePlan();
   const { plan: planData, isLoading, generatePlan, reorderPlan, lockPlan } = usePlan();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -171,7 +172,6 @@ export function DashboardClient() {
             <DayPlan />
           </div>
         </>
-        <DayPlan />
       )}
     </div>
   );
