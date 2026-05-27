@@ -48,7 +48,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(challenge, { status: 200 });
   } catch (error) {
-    console.error(`[GET /api/challenges/${id}]`, error);
+    console.error('[GET /api/challenges/[id]]', error);
     return NextResponse.json(
       { error: 'Failed to fetch challenge', code: 'INTERNAL_ERROR' },
       { status: 500 }
@@ -112,7 +112,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(challenge.toObject(), { status: 200 });
   } catch (error) {
-    console.error(`[PATCH /api/challenges/${id}]`, error);
+    console.error('[PATCH /api/challenges/[id]]', error);
     return NextResponse.json(
       { error: 'Failed to update challenge', code: 'INTERNAL_ERROR' },
       { status: 500 }

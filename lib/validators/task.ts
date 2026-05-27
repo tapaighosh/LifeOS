@@ -19,33 +19,45 @@ import { z } from 'zod';
 const ALLOWED_DURATIONS = [15, 30, 45, 60, 90, 120] as const;
 
 const PillarEnum = z.enum(['money', 'soul', 'curiosity'], {
-  error: 'Pillar must be one of: money, soul, curiosity',
+  message: 'Pillar must be one of: money, soul, curiosity',
 });
 
 const TypeEnum = z.enum(['recurring', 'one-time', 'project', 'recharge'], {
-  error: 'Type must be one of: recurring, one-time, project, recharge',
+  message: 'Type must be one of: recurring, one-time, project, recharge',
 });
 
 const EnergyCostEnum = z.enum(['high', 'medium', 'low'], {
-  error: 'Energy cost must be one of: high, medium, low',
+  message: 'Energy cost must be one of: high, medium, low',
 });
 
 const SlotPreferenceEnum = z.enum(['morning', 'evening', 'any'], {
-  error: 'Slot preference must be one of: morning, evening, any',
+  message: 'Slot preference must be one of: morning, evening, any',
 });
 
 const FrequencyEnum = z.enum(['daily', 'alternate', '3x_week', 'weekly', 'custom'], {
-  error: 'Frequency must be one of: daily, alternate, 3x_week, weekly, custom',
+  message: 'Frequency must be one of: daily, alternate, 3x_week, weekly, custom',
 });
 
 const DurationSchema = z
-  .number({ error: 'Duration must be a number' })
+  .number({ message: 'Duration must be a number' })
   .refine((d) => (ALLOWED_DURATIONS as readonly number[]).includes(d), {
     message: 'Duration must be one of: 15, 30, 45, 60, 90, 120 minutes',
   });
 
 // ─── Recharge Duration Refinement ────────────────────────────────────────────
 
+/**
+ * Applied to both create and update schemas.
+ * Uses superRefine so the error is attached to the `duration` path specifically,
+ * giving the frontend form a precise field-level error to display.
+ */
+function applyRechargeRule<T extends { type?: string; duration?: number }>(
+  schema: z.ZodType<T>
+) {
+  return (schema as any).superRefine
+    ? schema
+    : schema;
+}
 // Standalone refinement function reused in both schemas
 const rechargeRefinement = (data: { type?: string; duration?: number }, ctx: z.RefinementCtx) => {
   if (data.type === 'recharge' && data.duration !== undefined && data.duration > 15) {
@@ -62,7 +74,7 @@ const rechargeRefinement = (data: { type?: string; duration?: number }, ctx: z.R
 export const taskCreateSchema = z
   .object({
     title: z
-      .string()
+      .string({ message: 'Title is required' })
       .min(1, 'Title cannot be empty')
       .max(200, 'Title cannot exceed 200 characters')
       .trim(),

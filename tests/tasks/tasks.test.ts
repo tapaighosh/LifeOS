@@ -37,15 +37,15 @@ afterEach(async () => {
 
 // ─── Test Factories ───────────────────────────────────────────────────────────
 
-const makeTask = (overrides: Partial<Parameters<typeof Task.create>[0]> = {}) => ({
+const makeTask = (overrides: any = {}): any => ({
   title: 'DSA Practice',
-  pillar: 'money' as const,
+  pillar: 'money',
   category: 'Interviews',
-  type: 'recurring' as const,
+  type: 'recurring',
   duration: 60,
-  energy_cost: 'high' as const,
-  slot_preference: 'morning' as const,
-  frequency: 'daily' as const,
+  energy_cost: 'high',
+  slot_preference: 'morning',
+  frequency: 'daily',
   revision: false,
   priority: 4,
   active: true,

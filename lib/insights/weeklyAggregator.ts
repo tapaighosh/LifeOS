@@ -2,7 +2,7 @@ import DailyPlan from '@/models/DailyPlan';
 import DayLog from '@/models/DayLog';
 import TopicItem from '@/models/TopicItem';
 import TopicQueue from '@/models/TopicQueue';
-import { getRevisionsDue } from '@/lib/queues/queueEngine';
+import { getRevisionsDue } from '@/lib/revision/revisionEngine';
 
 export interface WeeklyData {
   weekStart: string;

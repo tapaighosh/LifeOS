@@ -36,7 +36,7 @@ const ENERGY_CONFIG = {
   high:     { label: 'High',     color: 'text-emerald-400', tip: 'Great day for deep work.' },
 };
 
-const PILLAR_EMOJI: Record<string, string> = { money: '💰', soul: '🔥', curiosity: '🧠' };
+const PILLAR_EMOJI: Record<string, string> = { money: 'Money', soul: 'Soul', curiosity: 'Curiosity' };
 
 export default function DashboardMorning({ data, userName }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);

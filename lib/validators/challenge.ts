@@ -17,11 +17,11 @@ import { z } from 'zod';
 export const challengeAcceptSchema = z.object({
   library_id: z.string().min(1, 'Library ID is required'),
   pillar: z.enum(['money', 'soul', 'curiosity'], {
-    error: 'Pillar must be money, soul, or curiosity',
+    message: 'Pillar must be money, soul, or curiosity',
   }),
   frequency: z
     .enum(['daily', 'alternate', '3x_week', 'weekly'], {
-      error: 'Frequency must be one of: daily, alternate, 3x_week, weekly',
+      message: 'Frequency must be one of: daily, alternate, 3x_week, weekly',
     })
     .optional(),
 });
@@ -39,7 +39,7 @@ export const challengeUpdateSchema = z
   .object({
     status: z
       .enum(['dropped', 'paused', 'active'], {
-        error: 'Status must be one of: dropped, paused, active',
+        message: 'Status must be one of: dropped, paused, active',
       })
       .optional(),
     notes: z
