@@ -3,16 +3,17 @@
 import { useState } from 'react';
 import { usePlan } from '@/hooks/usePlan';
 import { DayPlan } from '@/components/plan/DayPlan';
-import { NowPlaying } from '@/components/plan/NowPlaying';
 import { Button } from '@/components/ui/Button';
 import { Loader2, Sparkles, Lock, Unlock, PauseCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export function DashboardClient() {
+  const { plan: planData, isLoading, generatePlan, reorderPlan, lockPlan } = usePlan();
   const { plan: planData, isLoading, generatePlan, reorderPlan, lockPlan } = usePlan();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const today = new Date().toISOString().split('T')[0];
 
   const handleGenerate = async () => {
     try {
@@ -26,12 +27,11 @@ export function DashboardClient() {
     }
   };
 
-  const handleReorder = async (newPlanList: any[]) => {
-    // Only save order, don't recalculate times for now
+  const handleReorder = async (newPlanList: Parameters<typeof reorderPlan>[1]) => {
     try {
       await reorderPlan(planData!.date, newPlanList);
     } catch (err) {
-      console.error('Failed to save order');
+      console.error('Failed to save order', err);
     }
   };
 
@@ -82,7 +82,10 @@ export function DashboardClient() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={handleTour}
+              onClick={async () => {
+                setIsUpdating(true);
+                try { await lockPlan(today, true); } finally { setIsUpdating(false); }
+              }}
               disabled={isUpdating}
               className="text-zinc-400 hover:text-rose-400"
             >
@@ -168,6 +171,7 @@ export function DashboardClient() {
             <DayPlan />
           </div>
         </>
+        <DayPlan />
       )}
     </div>
   );

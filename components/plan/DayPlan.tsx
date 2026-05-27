@@ -167,13 +167,13 @@ export function DayPlan() {
       </div>
 
       {/* Skipped Tasks Notice */}
-      {plan.skipped_tasks?.length > 0 && (
+      {(plan.skipped_tasks?.length ?? 0) > 0 && (
         <div className="mt-8 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
           <h4 className="text-sm font-semibold text-amber-400 mb-2 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" /> Overflow Tasks
           </h4>
           <p className="text-xs text-amber-400/70">
-            {plan.skipped_tasks.length} task(s) could not fit into today's available time windows. They will remain pending for tomorrow.
+            {plan.skipped_tasks!.length} task(s) could not fit into today&apos;s available time windows. They will remain pending for tomorrow.
           </p>
         </div>
       )}

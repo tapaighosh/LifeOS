@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const task = await Task.create(parseResult.data as any);
 
     return NextResponse.json(task.toObject(), { status: 201 });

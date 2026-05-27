@@ -58,8 +58,8 @@ export function CheckInForm() {
         entries: Object.entries(entries).map(([id, data]) => ({
           task_id: data.entry_type === 'task' ? id : undefined,
           topic_item_id: data.entry_type === 'queue_topic' ? id : undefined,
-          entry_type: data.entry_type as 'task' | 'queue_topic',
-          status: data.status as any,
+          entry_type: (data.entry_type || 'task') as 'task' | 'queue_topic',
+          status: data.status as 'done' | 'partial' | 'skipped',
           completion_pct: data.status === 'partial' ? (data.completion_pct || 50) : undefined,
           skip_reason: data.status === 'skipped' ? data.skip_reason : undefined,
         })),

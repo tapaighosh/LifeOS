@@ -5,8 +5,9 @@ import { connectDB } from '@/lib/db';
 import EventBlock from '@/models/EventBlock';
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let id = 'unknown';
   try {
-    const { id } = await params;
+    id = (await params).id;
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

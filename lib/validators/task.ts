@@ -193,6 +193,3 @@ export const taskQuerySchema = z.object({
 export type TaskCreate = z.infer<typeof taskCreateSchema>;
 export type TaskUpdate = z.infer<typeof taskUpdateSchema>;
 export type TaskQuery = z.infer<typeof taskQuerySchema>;
-
-// Suppress unused warning for applyRechargeRule — it's a utility kept for future use
-void applyRechargeRule;

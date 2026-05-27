@@ -543,4 +543,17 @@ export const CHALLENGE_LIBRARY: LibraryChallenge[] = [
     suggested_frequency: 'weekly',
     suggested_duration: 60,
   },
+
+  // ─── PERSONAL GROWTH ─────────────────────────────────────────────────────  
+  {
+    id: 'me-011',
+    title: 'Vinh Giang Communication Practice',
+    category: 'mental',
+    description: 'Isolate one specific communication habit (e.g., eye contact, pacing, reducing filler words) and deliberately practice it every day for 30 days.',
+    target_type: 'streak',
+    target_value: 30,
+    suggested_pillar: 'curiosity',
+    suggested_frequency: 'daily',
+    suggested_duration: 15,
+  },
 ];
