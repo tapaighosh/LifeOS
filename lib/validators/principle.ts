@@ -12,12 +12,12 @@ import { z } from 'zod';
  */
 export const PrincipleSchema = z.object({
   heading: z
-    .string({ required_error: 'Heading is required' })
+    .string({ message: 'Heading is required' })
     .min(1, 'Heading cannot be empty')
     .max(120, 'Heading cannot exceed 120 characters')
     .trim(),
   body: z
-    .string({ required_error: 'Body is required' })
+    .string({ message: 'Body is required' })
     .min(1, 'Body cannot be empty')
     .max(500, 'Body cannot exceed 500 characters')
     .trim(),
