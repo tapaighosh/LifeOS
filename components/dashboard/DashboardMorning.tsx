@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import useSWR from 'swr';
 import { Sparkles, Plus, Zap, Trophy } from 'lucide-react';
 import { DayPlan } from '@/components/plan/DayPlan';
 import ChallengeMiniCard from '@/components/challenges/ChallengeMiniCard';
 import PillarHealthBar from '@/components/dashboard/PillarHealthBar';
 import AddToTodayDrawer from '@/components/dashboard/AddToTodayDrawer';
+import { PrincipleCard, PrincipleCardSkeleton } from '@/components/dashboard/PrincipleCard';
 
 interface PillarWeekData {
   count: number;
@@ -38,8 +40,14 @@ const ENERGY_CONFIG = {
 
 const PILLAR_EMOJI: Record<string, string> = { money: 'Money', soul: 'Soul', curiosity: 'Curiosity' };
 
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
 export default function DashboardMorning({ data, userName }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const { data: principleData } = useSWR<{
+    principle: { heading: string; body: string } | null;
+  }>('/api/principles/today', fetcher);
 
   const today = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -66,7 +74,17 @@ export default function DashboardMorning({ data, userName }: Props) {
           <p className="text-sm text-zinc-500 mt-1">{today}</p>
         </div>
 
-        {/* ─ 2. Energy Forecast ─ */}
+        {/* ─ 2. Today's Principle ─ */}
+        {principleData === undefined ? (
+          <PrincipleCardSkeleton />
+        ) : principleData.principle ? (
+          <PrincipleCard
+            heading={principleData.principle.heading}
+            body={principleData.principle.body}
+          />
+        ) : null}
+
+        {/* ─ 3. Energy Forecast ─ */}
         {data?.energyForecast && (
           <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-4">
             <div className="flex items-center gap-2 mb-1">
