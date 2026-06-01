@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Sparkles, Plus, Zap, Trophy } from 'lucide-react';
+import { Sparkles, Plus, Zap, Trophy, TrendingUp } from 'lucide-react';
 import { DayPlan } from '@/components/plan/DayPlan';
 import ChallengeMiniCard from '@/components/challenges/ChallengeMiniCard';
 import PillarHealthBar from '@/components/dashboard/PillarHealthBar';
@@ -178,6 +178,16 @@ export default function DashboardMorning({ data, userName }: Props) {
               />
             ))
           )}
+        </div>
+
+        {/* ─ Insights link ─ */}
+        <div className="flex items-center justify-end pt-2">
+          <Link
+            href="/insights"
+            className="text-xs text-indigo-400 hover:underline flex items-center gap-1"
+          >
+            <TrendingUp className="w-3 h-3" /> View weekly insights
+          </Link>
         </div>
       </div>
 
