@@ -88,14 +88,15 @@ export function TopicItemCard({
   }
 
   return (
-    <div
-      className={cn(
-        'rounded-xl border transition-colors',
-        isCovered
-          ? 'bg-zinc-900/30 border-zinc-800/50'
-          : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
-      )}
-    >
+    <>
+      <div
+        className={cn(
+          'rounded-xl border transition-colors',
+          isCovered
+            ? 'bg-zinc-900/30 border-zinc-800/50'
+            : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+        )}
+      >
       {/* Main row */}
       <div
         className="flex items-center gap-3 px-4 py-3 cursor-pointer"
@@ -245,5 +246,6 @@ export function TopicItemCard({
         prefillSource={item.title}
       />
     )}
+    </>
   );
 }
