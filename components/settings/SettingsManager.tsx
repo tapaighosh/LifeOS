@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useSettings } from '@/hooks/useSettings';
 import { Button } from '@/components/ui/Button';
-import { Loader2, Settings, Clock, Bell, Globe, Target } from 'lucide-react';
+import { Loader2, Settings, Clock, Bell, Globe, Target, Trophy, BookText, CalendarDays, TrendingUp, Zap, Layers, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 import type { SettingsUpdate } from '@/lib/validators/settings';
 import { cn } from '@/lib/utils';
 import { NotificationToggle } from '@/components/notifications/NotificationBanner';
@@ -377,6 +378,37 @@ export function SettingsManager() {
           </Button>
         </div>
       </form>
+
+      {/* ALL FEATURES */}
+      <section className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/60 space-y-3">
+        <h3 className="text-sm font-semibold tracking-wide text-zinc-300 flex items-center gap-2 border-b border-zinc-800 pb-3">
+          <Layers className="h-4 w-4" /> All Features
+        </h3>
+        <p className="text-xs text-zinc-500">Quick links to every section of LifeOS.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+          {([
+            { href: '/challenges', label: 'Challenges',  desc: 'Streaks & targets',  icon: Trophy,       color: 'text-amber-400' },
+            { href: '/notebook',   label: 'Notebook',    desc: 'Notes & learnings',  icon: BookText,     color: 'text-blue-400'  },
+            { href: '/calendar',   label: 'Calendar',    desc: 'Scheduled events',   icon: CalendarDays, color: 'text-violet-400'},
+            { href: '/insights',   label: 'Insights',    desc: 'Weekly review',      icon: TrendingUp,   color: 'text-violet-400'},
+            { href: '/recharge',   label: 'Recharge',    desc: 'Rest & recovery',    icon: Zap,          color: 'text-emerald-400'},
+            { href: '/queues',     label: 'Queue',       desc: 'Learning topics',    icon: Layers,       color: 'text-indigo-400'},
+          ] as const).map(({ href, label, desc, icon: Icon, color }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl border border-zinc-800/60 bg-zinc-800/30 hover:bg-zinc-800/60 hover:border-zinc-700 transition-all group"
+            >
+              <Icon className={`w-4 h-4 shrink-0 ${color}`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-200">{label}</p>
+                <p className="text-xs text-zinc-500">{desc}</p>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
