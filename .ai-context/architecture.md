@@ -127,6 +127,7 @@ active          → true | false (soft delete)
 | POST | `/api/notebook/topics/[id]/entries` | Add entry; updates topic entry_count + last_entry_on |
 | PATCH | `/api/notebook/entries/[id]` | Update an entry (body, source, tags) |
 | DELETE | `/api/notebook/entries/[id]` | Delete entry; decrements topic entry_count |
+| GET | `/api/revision/queue` | List RevisionQueue items due today (capped at 3) |
 
 ---
 

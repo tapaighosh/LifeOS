@@ -12,9 +12,14 @@
  */
 
 import { useState } from 'react';
-import { GripVertical, ChevronDown, ChevronUp, Check, Minus, MoveRight, Circle } from 'lucide-react';
+import useSWR from 'swr';
+import { GripVertical, ChevronDown, ChevronUp, Check, Minus, MoveRight, Circle, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ITopicItem } from '@/models/TopicItem';
+import { INotebookTopic } from '@/models/NotebookTopic';
+import { NewEntryDrawer } from '@/components/notebook/NewEntryDrawer';
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface TopicItemCardProps {
   item: ITopicItem & { _id: string };
@@ -51,6 +56,11 @@ export function TopicItemCard({
   const [solvedWithout, setSolvedWithout] = useState(item.solved_without_hint ?? false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [notebookDrawerOpen, setNotebookDrawerOpen] = useState(false);
+
+  // Resolve the Learnings topic ID for the notebook shortcut
+  const { data: topicsData } = useSWR<{ topics: INotebookTopic[] }>('/api/notebook/topics', fetcher);
+  const learningsTopicId = topicsData?.topics.find((t) => t.title === 'Learnings')?._id?.toString();
 
   const isCovered = item.status === 'covered';
 
@@ -136,14 +146,24 @@ export function TopicItemCard({
       {/* Accordion panel */}
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-zinc-800/60 pt-3">
-          {/* Covered date */}
+          {/* Covered date + notebook shortcut */}
           {isCovered && item.covered_on && (
-            <p className="text-xs text-zinc-500">
-              Covered on <span className="text-zinc-400">{item.covered_on}</span>
-              {item.next_revision && (
-                <> · Revision due <span className="text-indigo-400">{item.next_revision}</span></>
+            <div>
+              <p className="text-xs text-zinc-500">
+                Covered on <span className="text-zinc-400">{item.covered_on}</span>
+                {item.next_revision && (
+                  <> · Revision due <span className="text-indigo-400">{item.next_revision}</span></>
+                )}
+              </p>
+              {learningsTopicId && (
+                <button
+                  onClick={() => setNotebookDrawerOpen(true)}
+                  className="mt-2 text-xs text-indigo-400 hover:underline flex items-center gap-1"
+                >
+                  <BookOpen className="w-3 h-3" /> Save to Notebook
+                </button>
               )}
-            </p>
+            </div>
           )}
 
           {/* Notes */}
@@ -213,5 +233,17 @@ export function TopicItemCard({
         </div>
       )}
     </div>
+
+    {/* Save to Notebook drawer — only when a covered item triggers it */}
+    {notebookDrawerOpen && learningsTopicId && (
+      <NewEntryDrawer
+        topicId={learningsTopicId}
+        topicName="Learnings"
+        isOpen={notebookDrawerOpen}
+        onClose={() => setNotebookDrawerOpen(false)}
+        onAdded={() => setNotebookDrawerOpen(false)}
+        prefillSource={item.title}
+      />
+    )}
   );
 }
