@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Moon, CheckCircle, Plus, CheckSquare, X } from 'lucide-react';
+import { Moon, CheckCircle, Plus, CheckSquare, X, Sparkles } from 'lucide-react';
 import { DayPlan } from '@/components/plan/DayPlan';
 import TomorrowPreview from '@/components/dashboard/TomorrowPreview';
 import AddToTodayDrawer from '@/components/dashboard/AddToTodayDrawer';
@@ -49,6 +49,20 @@ export default function DashboardEvening({ data, userName }: Props) {
   return (
     <div className="min-h-screen bg-zinc-950 pb-24 md:pb-6">
       <div className="max-w-2xl mx-auto px-4 pt-8 space-y-6">
+
+        {/* ─ 0. Tonight's Check-In CTA ─ */}
+        <Link
+          href="/checkin"
+          className="block rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 hover:bg-indigo-500/20 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-zinc-100">Tonight's Check-In</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Review your day and log your energy.</p>
+            </div>
+            <Sparkles className="w-5 h-5 text-indigo-400 shrink-0" />
+          </div>
+        </Link>
 
         {/* ─ 1. Greeting ─ */}
         <div>

@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Sparkles, Plus, Zap, Trophy } from 'lucide-react';
+import { Sparkles, Plus, Zap, Trophy, TrendingUp } from 'lucide-react';
 import { DayPlan } from '@/components/plan/DayPlan';
 import ChallengeMiniCard from '@/components/challenges/ChallengeMiniCard';
 import PillarHealthBar from '@/components/dashboard/PillarHealthBar';
 import AddToTodayDrawer from '@/components/dashboard/AddToTodayDrawer';
 import { PrincipleCard, PrincipleCardSkeleton } from '@/components/dashboard/PrincipleCard';
+import { RevisionQueueWidget } from '@/components/dashboard/RevisionQueueWidget';
 
 interface PillarWeekData {
   count: number;
@@ -84,7 +85,10 @@ export default function DashboardMorning({ data, userName }: Props) {
           />
         ) : null}
 
-        {/* ─ 3. Energy Forecast ─ */}
+        {/* ─ 3. Revision Queue (auto-hides when empty) ─ */}
+        <RevisionQueueWidget />
+
+        {/* ─ 4. Energy Forecast ─ */}
         {data?.energyForecast && (
           <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -178,6 +182,16 @@ export default function DashboardMorning({ data, userName }: Props) {
               />
             ))
           )}
+        </div>
+
+        {/* ─ Insights link ─ */}
+        <div className="flex items-center justify-end pt-2">
+          <Link
+            href="/insights"
+            className="text-xs text-indigo-400 hover:underline flex items-center gap-1"
+          >
+            <TrendingUp className="w-3 h-3" /> View weekly insights
+          </Link>
         </div>
       </div>
 

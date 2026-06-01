@@ -95,6 +95,44 @@ export default function InsightsPage() {
         <PillarChart balance={data.pillarBalance} />
         <EnergyTrend energyByDay={data.energyByDay} />
       </div>
+
+      {/* Queue Stats */}
+      <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-5">
+        <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4">Learning Queue</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: 'Topics Covered', value: data.queueStats.topicsCoveredThisWeek },
+            { label: 'DSA Solved', value: data.queueStats.dsaSolvedThisWeek },
+            { label: 'Revisions Due', value: data.queueStats.revisionsDue, highlight: data.queueStats.revisionsDue > 0 },
+            { label: 'Active Queues', value: data.queueStats.activeQueues },
+          ].map(({ label, value, highlight }) => (
+            <div key={label} className="text-center">
+              <p className={`text-2xl font-bold ${ highlight ? 'text-amber-400' : 'text-zinc-100' }`}>{value}</p>
+              <p className="text-xs text-zinc-500 mt-1">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Neglected Pillars */}
+      {data.neglectedPillars.length > 0 && (
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-5">
+          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Needs Attention</h2>
+          <p className="text-sm text-zinc-300 mb-3">
+            The following pillars represent less than 15% of your completed work this week:
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {data.neglectedPillars.map((p: string) => (
+              <span
+                key={p}
+                className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-sm font-medium capitalize"
+              >
+                {p}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

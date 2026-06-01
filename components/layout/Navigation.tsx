@@ -13,14 +13,8 @@
  *
  *   Two trees (md:hidden / hidden md:flex) let each layout own its markup cleanly.
  *   The breakpoint logic is compile-time Tailwind — no JS involved in the switch.
- *
- * WHY setInterval FOR SUNDAY CHECK instead of checking once on mount:
- *   If a user leaves the app open across the Sunday 5 PM boundary, a one-time mount
- *   check would never re-evaluate. The interval polls every 60 s and clears on unmount
- *   to avoid memory leaks.
  */
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import useSWR from 'swr';
@@ -28,9 +22,7 @@ import {
   LayoutDashboard,
   CheckSquare,
   Trophy,
-  BookOpen,
-  Sparkles,
-  TrendingUp,
+  BookText,
   Settings2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -41,15 +33,13 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // ─── Nav items definition ─────────────────────────────────────────────────────
 
-function useNavItems(isSundayEvening: boolean) {
+function useNavItems() {
   return [
-    { name: 'Home',       href: '/dashboard',  icon: LayoutDashboard, highlight: false },
-    { name: 'Tasks',      href: '/tasks',       icon: CheckSquare,     highlight: false },
-    { name: 'Challenges', href: '/challenges',  icon: Trophy,          highlight: false, badge: true },
-    { name: 'Queues',     href: '/queues',      icon: BookOpen,        highlight: false },
-    { name: 'Check-In',   href: '/checkin',     icon: Sparkles,        highlight: false },
-    { name: 'Insights',   href: '/insights',    icon: TrendingUp,      highlight: isSundayEvening },
-    { name: 'Settings',   href: '/settings',    icon: Settings2,       highlight: false },
+    { name: 'Home',       href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Tasks',      href: '/tasks',      icon: CheckSquare },
+    { name: 'Challenges', href: '/challenges', icon: Trophy, badge: true },
+    { name: 'Notebook',   href: '/notebook',   icon: BookText },
+    { name: 'Settings',   href: '/settings',   icon: Settings2 },
   ] as const;
 }
 
@@ -57,26 +47,14 @@ function useNavItems(isSundayEvening: boolean) {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [isSundayEvening, setIsSundayEvening] = useState(false);
-
-  // Live Sunday-evening check — re-evaluates every 60 s
-  useEffect(() => {
-    function check() {
-      const now = new Date();
-      setIsSundayEvening(now.getDay() === 0 && now.getHours() >= 17);
-    }
-    check(); // run immediately on mount
-    const id = setInterval(check, 60_000);
-    return () => clearInterval(id); // cleanup on unmount
-  }, []);
 
   // Active challenge count for badge
   const { data: challenges } = useSWR<{ status: string }[]>('/api/challenges', fetcher, {
-    refreshInterval: 30_000, // re-check every 30 s
+    refreshInterval: 30_000,
   });
   const hasActiveChallenges = Array.isArray(challenges) && challenges.some((c) => c.status === 'active');
 
-  const navItems = useNavItems(isSundayEvening);
+  const navItems = useNavItems();
 
   // ── Mobile bottom bar (hidden on md+) ──────────────────────────────────────
   const MobileNav = (
@@ -96,8 +74,7 @@ export function Navigation() {
               href={item.href}
               className={cn(
                 'relative flex flex-col items-center justify-center w-12 h-12 transition-colors',
-                isActive ? 'text-indigo-400' : 'text-zinc-500 hover:text-zinc-300',
-                item.highlight && !isActive && 'text-amber-400 animate-pulse'
+                isActive ? 'text-indigo-400' : 'text-zinc-500 hover:text-zinc-300'
               )}
               aria-current={isActive ? 'page' : undefined}
             >
@@ -156,8 +133,7 @@ export function Navigation() {
                 'relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200',
                 isActive
                   ? 'bg-indigo-500/20 text-indigo-400'
-                  : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300',
-                item.highlight && !isActive && 'text-amber-400 ring-1 ring-amber-400/30'
+                  : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
               )}
             >
               <Icon className="w-5 h-5" />
