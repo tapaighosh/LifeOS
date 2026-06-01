@@ -1,11 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { usePlan } from '@/hooks/usePlan';
 import { Button } from '@/components/ui/Button';
 import { Loader2, CheckCircle2, Circle, AlertCircle, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DayLogCheckinPayload } from '@/lib/validators/dayLog';
+import { INotebookTopic } from '@/models/NotebookTopic';
+import { NewEntryDrawer } from '@/components/notebook/NewEntryDrawer';
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const EMOJIS = ['😫', '🥱', '😐', '🙂', '🤩'];
 const SKIP_REASONS = ['tired', 'no time', 'forgot', 'spontaneous'];
@@ -19,6 +24,12 @@ export function CheckInForm() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notebookDrawerOpen, setNotebookDrawerOpen] = useState(false);
+  const [notebookPrefill, setNotebookPrefill] = useState('');
+
+  // Resolve the Learnings topic ID for the notebook shortcut
+  const { data: topicsData } = useSWR<{ topics: INotebookTopic[] }>('/api/notebook/topics', fetcher);
+  const learningsTopicId = topicsData?.topics.find((t) => t.title === 'Learnings')?._id?.toString();
 
   useEffect(() => {
     if (plan) {
@@ -161,6 +172,23 @@ export function CheckInForm() {
                 </div>
               </div>
 
+              {/* Save to Notebook shortcut — queue topics marked done only */}
+              {entry.entry_type === 'queue_topic' && st === 'done' && learningsTopicId && (
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-xs text-zinc-500">Save your learning?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotebookPrefill(entry.title);
+                      setNotebookDrawerOpen(true);
+                    }}
+                    className="text-xs text-indigo-400 hover:underline"
+                  >
+                    Save to Notebook
+                  </button>
+                </div>
+              )}
+
               {st === 'partial' && (
                 <div className="pt-2 border-t border-zinc-800/50">
                   <label className="text-xs text-zinc-500 mb-2 block">Completion Percentage</label>
@@ -229,6 +257,18 @@ export function CheckInForm() {
       <Button type="submit" disabled={submitting || reflection.length > 200} className="w-full h-12 bg-indigo-600 hover:bg-indigo-500">
         {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Complete Check-In'}
       </Button>
+
+      {/* Save to Notebook drawer — triggered by queue topic CTAs */}
+      {learningsTopicId && (
+        <NewEntryDrawer
+          topicId={learningsTopicId}
+          topicName="Learnings"
+          isOpen={notebookDrawerOpen}
+          onClose={() => setNotebookDrawerOpen(false)}
+          onAdded={() => setNotebookDrawerOpen(false)}
+          prefillSource={notebookPrefill}
+        />
+      )}
     </form>
   );
 }

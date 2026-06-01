@@ -1675,3 +1675,459 @@ Explain:
 ```
 
 ---
+---
+
+## Phase 4 — Principles & Notebook
+
+> **Decisions locked in:**
+> - Navigation: Full restructure — Home | Tasks | Challenges | Notebook | Settings (5 items). Check-In and Insights move to dashboard inline links.
+> - Principles: User provides their own list. Seeder accepts a `PRINCIPLES` array constant at the top of the script.
+> - "Save to Notebook" appears in BOTH TopicItemCard (on cover) AND the night check-in form.
+> - Notebook entry body: soft 2000-char limit — counter shown when >= 1800 chars.
+
+---
+
+### Phase 4 / Step 1 — Bug Fixes (apply first)
+
+**What it does:** Fixes 3 confirmed bugs and 1 code-quality issue carried over from Phases 1-3.
+**Files changed:** `lib/insights/weeklyAggregator.ts`, `lib/scheduler/contextCollector.ts`, `components/dashboard/DashboardMorning.tsx`
+
+**The Prompt:**
+
+```
+Fix 4 bugs in the LifeOS codebase before starting Phase 4 features.
+
+Bug 1 - weeklyAggregator.ts: Wrong import path (ALREADY FIXED - verify it reads):
+  import { getRevisionsDue } from '@/lib/revision/revisionEngine';
+  Confirm the fix is present, do not change anything else.
+
+Bug 2 - contextCollector.ts: alternate frequency uses wrong time reference.
+  Find the isTaskDueToday function. In the 'alternate' case replace:
+    OLD: const daysSinceCreation = Math.floor((Date.now() - new Date((task as any).createdAt).getTime()) / 86400000);
+    NEW: const targetTime = new Date(targetDate).getTime();
+         const daysSinceCreation = Math.floor((targetTime - new Date((task as any).createdAt).getTime()) / 86400000);
+
+Bug 3 - DashboardMorning.tsx: Garbled pillar emoji. Replace PILLAR_EMOJI with:
+  const PILLAR_EMOJI: Record<string, string> = { money: 'Money', soul: 'Soul', curiosity: 'Curiosity' };
+  (Use text labels instead of emoji to avoid encoding issues, or use the correct emoji if terminal supports it)
+
+Bug 4 - contextCollector.ts: Redundant DailyPlan queries. Merge into single 7-day query:
+  const weekPlans = await DailyPlan.find({ date: { $gte: sevenDaysAgoStr, $lt: targetDate } }).lean();
+  const recentPlans = weekPlans.filter(p => p.date >= threeDaysAgoStr);
+  Remove the original recentPlans DailyPlan.find() call.
+
+After all fixes: run npx tsc --noEmit and confirm 0 errors.
+```
+
+---
+
+### Phase 4 / Step 2 — Principle Model and Seeder
+
+**Files created:** `models/Principle.ts`, `scripts/seedPrinciples.ts`, `lib/validators/principle.ts`
+
+**The Prompt:**
+
+```
+Implement the Principle data layer for LifeOS Phase 4.
+
+1. models/Principle.ts:
+   Interface: IPrinciple extends Document { heading: string; body: string; show_order: number; last_shown: string | null; active: boolean; }
+   Schema: heading (String required), body (String required), show_order (Number required), last_shown (String default null), active (Boolean default true)
+   Indexes: { last_shown: 1 }, { show_order: 1 }
+   Standard mongoose.models.Principle || mongoose.model pattern.
+
+2. lib/validators/principle.ts:
+   export const PrincipleSchema = z.object({ heading: z.string().min(1).max(120), body: z.string().min(1).max(500) });
+   export type PrincipleInput = z.infer<typeof PrincipleSchema>;
+
+3. scripts/seedPrinciples.ts:
+   Connect to MongoDB using lib/db/mongoose.ts pattern.
+   PRINCIPLES array at top — USER WILL FILL THIS IN:
+     const PRINCIPLES: Array<{ heading: string; body: string }> = [
+       // Paste your principles here
+       // { heading: "Do what you love", body: "Passion is essential because without it, discipline becomes punishment." },
+     ];
+   Idempotency: if (await Principle.countDocuments() > 0) skip.
+   Fisher-Yates shuffle to assign show_order (0 to N-1).
+   insertMany with show_order and last_shown: null.
+   Log count, then disconnect.
+   Run: npx ts-node --project tsconfig.json scripts/seedPrinciples.ts
+```
+
+---
+
+### Phase 4 / Step 3 — Principles API Route
+
+**Files created:** `app/api/principles/today/route.ts`
+
+**The Prompt:**
+
+```
+Implement GET /api/principles/today for LifeOS.
+
+Logic:
+  1. connectDB, getServerSession — return 401 if no session.
+  2. today = new Date().toISOString().split('T')[0]
+  3. Find principle not shown today (null sorts first, then oldest date):
+       Principle.findOne({ active: true, last_shown: { $ne: today } }).sort({ last_shown: 1 }).lean()
+  4. If null (all shown today): Principle.findOne({ active: true }).sort({ last_shown: 1 }).lean()
+  5. If still null: return NextResponse.json({ principle: null }, { status: 200 })
+  6. Idempotent update: only set last_shown if !== today
+       if (principle.last_shown !== today) await Principle.updateOne({ _id }, { $set: { last_shown: today } })
+  7. Return: NextResponse.json({ principle: { _id, heading, body } })
+```
+
+---
+
+### Phase 4 / Step 4 — PrincipleCard Component + Dashboard Integration
+
+**Files created:** `components/dashboard/PrincipleCard.tsx`
+**Files modified:** `components/dashboard/DashboardMorning.tsx`
+
+**The Prompt:**
+
+```
+Implement PrincipleCard and integrate into DashboardMorning.
+
+1. components/dashboard/PrincipleCard.tsx ('use client'):
+   Props: { heading: string; body: string }
+   Design: bg-zinc-900/50 border border-zinc-800/60 rounded-2xl p-4 with border-l-2 border-l-indigo-500/60
+   Header label: "TODAY'S PRINCIPLE" text-xs text-zinc-500 uppercase tracking-wider
+   Heading: text-sm font-semibold text-zinc-100
+   Body: collapsed to 2 lines (line-clamp-2 CSS), "Read more" / "Show less" toggle if > 100 chars
+   Also export PrincipleCardSkeleton with animate-pulse placeholders.
+
+2. components/dashboard/DashboardMorning.tsx:
+   Add SWR fetch:
+     const { data: principleData } = useSWR<{ principle: { heading: string; body: string } | null }>('/api/principles/today', fetcher);
+   Insert between greeting and Energy Forecast sections:
+     {principleData === undefined ? <PrincipleCardSkeleton /> : principleData.principle ? <PrincipleCard heading={principleData.principle.heading} body={principleData.principle.body} /> : null}
+   Import PrincipleCard and PrincipleCardSkeleton from '@/components/dashboard/PrincipleCard'.
+```
+
+---
+
+### Phase 4 / Step 5 — Notebook Models and Seeders
+
+**Files created:** `models/NotebookTopic.ts`, `models/NotebookEntry.ts`, `scripts/seedNotebookTopics.ts`, `lib/validators/notebook.ts`
+
+**The Prompt:**
+
+```
+Implement the Notebook data layer for LifeOS Phase 4.
+
+1. models/NotebookTopic.ts:
+   Interface: INotebookTopic extends Document {
+     user_id: string; title: string; icon: string;
+     color: 'amber'|'blue'|'rose'|'emerald'|'indigo'|'zinc';
+     entry_count: number; last_entry_on: string|null;
+     pinned: boolean; active: boolean; created_at: Date;
+   }
+   Schema: user_id (String default 'default'), title (String required maxlength 60), icon (String default 'note emoji'),
+     color (enum, default 'indigo'), entry_count (Number default 0), last_entry_on (String default null),
+     pinned (Boolean default false), active (Boolean default true), created_at (Date default Date.now)
+   Compound index: { user_id: 1, pinned: -1, last_entry_on: -1 }
+
+2. models/NotebookEntry.ts:
+   Interface: INotebookEntry extends Document { topic_id: Types.ObjectId; body: string; source: string; tags: string[]; created_at: Date; }
+   Schema: topic_id (ObjectId ref NotebookTopic required), body (String required maxlength 5000),
+     source (String maxlength 100 default ''), tags ([String] max 5 items), created_at (Date default Date.now)
+   Index: { topic_id: 1, created_at: -1 }
+
+3. lib/validators/notebook.ts:
+   NotebookTopicSchema: { title: z.string().min(1).max(60), icon: z.string().min(1).max(4), color: z.enum([...6 colors]), pinned: z.boolean().optional() }
+   NotebookEntrySchema: { body: z.string().min(1).max(5000), source: z.string().max(100).optional().default(''), tags: z.array(z.string().max(30)).max(5).optional().default([]) }
+
+4. scripts/seedNotebookTopics.ts:
+   Idempotent: skip if NotebookTopic.countDocuments({ user_id: 'default' }) > 0.
+   Seed 4 default topics:
+     { user_id: 'default', title: 'Ideas', icon: 'idea emoji', color: 'amber', pinned: true }
+     { user_id: 'default', title: 'Learnings', icon: 'book emoji', color: 'blue', pinned: true }
+     { user_id: 'default', title: 'Lines', icon: 'speech emoji', color: 'rose', pinned: false }
+     { user_id: 'default', title: 'Observations', icon: 'search emoji', color: 'zinc', pinned: false }
+   Run: npx ts-node --project tsconfig.json scripts/seedNotebookTopics.ts
+```
+
+---
+
+### Phase 4 / Step 6 — Notebook API Routes
+
+**Files created:** `app/api/notebook/topics/route.ts`, `app/api/notebook/topics/[id]/route.ts`, `app/api/notebook/topics/[id]/entries/route.ts`, `app/api/notebook/entries/[id]/route.ts`
+
+**The Prompt:**
+
+```
+Implement all Notebook API routes for LifeOS Phase 4.
+All routes: connectDB, getServerSession (401 if null), try/catch (500 on error).
+
+app/api/notebook/topics/route.ts:
+  GET: find({ active: true }).sort({ pinned: -1, last_entry_on: -1 }).lean() -> { topics }
+  POST: validate NotebookTopicSchema, create({ ...validated, user_id: 'default' }) -> 201 { topic }
+
+app/api/notebook/topics/[id]/route.ts:
+  PATCH: validate NotebookTopicSchema.partial(), findByIdAndUpdate(id, validated, { new: true }) -> 404 or { topic }
+  DELETE: cascade — deleteMany({ topic_id: id }) then findByIdAndDelete(id) -> 404 or { ok: true }
+
+app/api/notebook/topics/[id]/entries/route.ts:
+  GET: find({ topic_id: id }).sort({ created_at: -1 }).limit(50).lean() -> { entries }
+  POST: validate NotebookEntrySchema, today = YYYY-MM-DD string.
+        Promise.all([
+          NotebookEntry.create({ topic_id: id, ...validated }),
+          NotebookTopic.findByIdAndUpdate(id, { $inc: { entry_count: 1 }, $set: { last_entry_on: today } })
+        ]) -> 201 { entry }
+
+app/api/notebook/entries/[id]/route.ts:
+  PATCH: validate NotebookEntrySchema.partial(), findByIdAndUpdate -> 404 or { entry }
+  DELETE: findByIdAndDelete(id) -> 404 if null.
+          findByIdAndUpdate(entry.topic_id, { $inc: { entry_count: -1 } }) -> { ok: true }
+
+Update .ai-context/architecture.md API routes table with all new notebook routes.
+```
+
+---
+
+### Phase 4 / Step 7 — Notebook UI Components
+
+**Files created:** `components/notebook/NotebookTopicCard.tsx`, `components/notebook/EntryCard.tsx`, `components/notebook/NewEntryDrawer.tsx`, `components/notebook/NewTopicModal.tsx`
+
+**The Prompt:**
+
+```
+Implement the 4 Notebook UI components for LifeOS Phase 4.
+Design system: bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-2xl (same as rest of app).
+Use lucide-react for icons.
+
+1. components/notebook/NotebookTopicCard.tsx:
+   Pure display, server-renderable (no 'use client').
+   Props: { topic: INotebookTopic }
+   Color map for left border: { amber:'border-l-amber-400', blue:'border-l-blue-400', rose:'border-l-rose-400', emerald:'border-l-emerald-400', indigo:'border-l-indigo-400', zinc:'border-l-zinc-500' }
+   Layout inside Link to /notebook/[topic._id]:
+     - Top row: icon + title + (pin icon if pinned)
+     - Bottom row: "{entry_count} entries · {relative date}"
+     Relative date: null -> "No entries yet", today -> "today", yesterday -> "yesterday", else date string.
+   Hover: transition-all hover:scale-[1.01] hover:border-zinc-600
+
+2. components/notebook/EntryCard.tsx ('use client'):
+   Props: { entry: INotebookEntry; onUpdated: () => void; onDeleted: () => void }
+   States: collapsed -> expanded -> editing (useState booleans)
+   Collapsed: date label + first 80 chars + "..." if longer
+   Expanded: full body (whitespace-pre-wrap) + source (italic) + [Edit] [Delete] buttons
+   Editing: textarea (autoFocus), character counter at >= 1800 chars (amber) / >= 2000 (rose), source input, [Save] [Cancel]
+   Delete: inline confirm before DELETE API call.
+   Date formatting: "Today" / "Yesterday" / "15 May 2025" helper function.
+
+3. components/notebook/NewEntryDrawer.tsx ('use client'):
+   Props: { topicId: string; topicName: string; isOpen: boolean; onClose: () => void; onAdded: () => void; prefillSource?: string }
+   Slide-up drawer pattern (same as AddTopicDrawer in queues): fixed overlay + bottom-anchored panel.
+   Fields:
+     body textarea: autoFocus, placeholder "Write anything...", maxLength 5000
+     Character counter: visible when body.length >= 1800, amber at 1800-1999, rose at 2000+
+     source input: placeholder "Where did this come from? (optional)", defaultValue={prefillSource}
+   On Save: POST /api/notebook/topics/[topicId]/entries -> toast -> onAdded() -> onClose() -> reset form.
+
+4. components/notebook/NewTopicModal.tsx ('use client'):
+   Uses existing Modal component from components/ui/Modal.tsx if it accepts children.
+   Fields:
+     title: text input, autofocus, required, maxlength 60
+     icon picker: 12 preset emoji in 4x3 grid, selected shows ring-2 ring-indigo-500
+       Emoji list: paste actual emoji characters for ideas, books, speech, search, travel, brain, strength, target, growth, music, notes, lightning
+     color picker: 6 filled circles, selected shows ring-2 ring-indigo-500
+       Colors: amber / blue / rose / emerald / indigo / zinc
+   On Submit: POST /api/notebook/topics -> toast -> onCreated() -> onClose() -> reset.
+```
+
+---
+
+### Phase 4 / Step 8 — Notebook Pages
+
+**Files created:** `app/notebook/page.tsx`, `app/notebook/loading.tsx`, `app/notebook/[topic_id]/page.tsx`
+
+**The Prompt:**
+
+```
+Implement the Notebook pages for LifeOS Phase 4.
+
+1. app/notebook/loading.tsx:
+   4 animate-pulse skeleton cards (h-20 bg-zinc-800/50 rounded-2xl) in flex-col gap-3.
+
+2. app/notebook/page.tsx (server component):
+   Auth check: getServerSession -> redirect('/login') if null.
+   Direct DB fetch: connectDB() then NotebookTopic.find({ active: true, user_id: 'default' }).sort({ pinned: -1, last_entry_on: -1 }).lean()
+   Extract a NotebookHeader client component (inline or separate file) that owns the "+ New Topic" button and NewTopicModal state.
+     After topic created: call router.refresh() to reload server data.
+   Render: header + NotebookHeader + topics list (NotebookTopicCard per topic) + empty state if 0 topics.
+   Empty state text: "Your notebook is empty. Create your first topic."
+
+3. app/notebook/[topic_id]/page.tsx ('use client'):
+   useSWR for entries from /api/notebook/topics/[topic_id]/entries
+   useSWR for topic name from /api/notebook/topics (find by id)
+   State: isDrawerOpen, prefillSource
+   Entry list: sort newest first (API already does this), group by date label above each date group.
+   Empty state: "No entries yet. Write your first one."
+   Loading: 3 skeleton cards (h-16 animate-pulse).
+   Fixed or inline "+ New Entry" button.
+   NewEntryDrawer at bottom with mutate() on onAdded.
+```
+
+---
+
+### Phase 4 / Step 9 — Navigation Restructure
+
+**Files modified:** `components/layout/Navigation.tsx`, `components/dashboard/DashboardMorning.tsx`, `components/dashboard/DashboardEvening.tsx`
+
+**How to verify:** Mobile bar shows exactly 5 items. /insights and /checkin still work as direct URLs.
+
+**The Prompt:**
+
+```
+Restructure the LifeOS navigation for Phase 4.
+
+1. components/layout/Navigation.tsx:
+   Import BookText from 'lucide-react'. Remove TrendingUp and Sparkles imports.
+   Update useNavItems to return exactly 5 items:
+     { name: 'Home',       href: '/dashboard', icon: LayoutDashboard }
+     { name: 'Tasks',      href: '/tasks',      icon: CheckSquare }
+     { name: 'Challenges', href: '/challenges', icon: Trophy, badge: true }
+     { name: 'Notebook',   href: '/notebook',   icon: BookText }
+     { name: 'Settings',   href: '/settings',   icon: Settings2 }
+   Remove isSundayEvening state, useEffect, and setInterval entirely.
+   Keep hasActiveChallenges SWR for the challenge badge.
+   Remove the `highlight` property from all items (no longer needed).
+
+2. components/dashboard/DashboardMorning.tsx:
+   After the "This Week's Pillars" section (last section in the scroll), add:
+     <div className="flex items-center justify-end pt-2">
+       <Link href="/insights" className="text-xs text-indigo-400 hover:underline flex items-center gap-1">
+         <TrendingUp className="w-3 h-3" /> View weekly insights
+       </Link>
+     </div>
+   Import TrendingUp from 'lucide-react'.
+
+3. components/dashboard/DashboardEvening.tsx:
+   At the TOP of the content area (before existing sections), add:
+     <Link href="/checkin" className="block rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 hover:bg-indigo-500/20 transition-colors">
+       <div className="flex items-center justify-between">
+         <div>
+           <p className="text-sm font-semibold text-zinc-100">Tonight's Check-In</p>
+           <p className="text-xs text-zinc-400 mt-0.5">Review your day and log your energy.</p>
+         </div>
+         <Sparkles className="w-5 h-5 text-indigo-400 shrink-0" />
+       </div>
+     </Link>
+   Import Sparkles from 'lucide-react'. Import Link from 'next/link'.
+```
+
+---
+
+### Phase 4 / Step 10 — Save to Notebook Connection
+
+**Files modified:** `components/queues/TopicItemCard.tsx`, `components/checkin/CheckInForm.tsx`
+
+**The Prompt:**
+
+```
+Add the "Save to Notebook" shortcut to LifeOS Phase 4.
+This appears after covering a queue topic. It is OPTIONAL for the user — just a CTA, never forced.
+
+SHARED PATTERN in both components:
+  const { data: topicsData } = useSWR<{ topics: INotebookTopic[] }>('/api/notebook/topics', fetcher);
+  const learningsTopicId = topicsData?.topics.find(t => t.title === 'Learnings')?._id?.toString();
+
+1. components/queues/TopicItemCard.tsx:
+   Add state: const [notebookDrawerOpen, setNotebookDrawerOpen] = useState(false);
+   In the expanded view of a covered item (status === 'covered'), after covered_on date, add:
+     {learningsTopicId && (
+       <button onClick={() => setNotebookDrawerOpen(true)} className="mt-2 text-xs text-indigo-400 hover:underline flex items-center gap-1">
+         <BookOpen className="w-3 h-3" /> Save to Notebook
+       </button>
+     )}
+   Add NewEntryDrawer at end of return:
+     {notebookDrawerOpen && learningsTopicId && (
+       <NewEntryDrawer topicId={learningsTopicId} topicName="Learnings" isOpen={notebookDrawerOpen}
+         onClose={() => setNotebookDrawerOpen(false)} onAdded={() => setNotebookDrawerOpen(false)}
+         prefillSource={item.title} />
+     )}
+   Import NewEntryDrawer and BookOpen.
+
+2. components/checkin/CheckInForm.tsx:
+   Add state: notebookDrawerOpen (boolean), notebookPrefill (string).
+   Fetch learningsTopicId (same SWR pattern).
+   For each check-in entry where entry_type === 'queue_topic' AND status === 'done',
+   show below the status toggle:
+     <div className="mt-1 flex items-center gap-2">
+       <span className="text-xs text-zinc-500">Save your learning?</span>
+       <button onClick={() => { setNotebookPrefill(entry.title); setNotebookDrawerOpen(true); }}
+         className="text-xs text-indigo-400 hover:underline">Save to Notebook</button>
+     </div>
+   Add NewEntryDrawer at end of form return with notebookPrefill as prefillSource.
+   Do NOT change any existing check-in submission logic.
+```
+
+---
+
+### Phase 4 / Step 11 — Tests
+
+**Files created:** `tests/principles/principles.test.ts`, `tests/notebook/notebook.test.ts`
+
+**The Prompt:**
+
+```
+Write Jest tests for Principles and Notebook modules in LifeOS Phase 4.
+Follow patterns in tests/tasks/tasks.test.ts and tests/queues/queues.test.ts.
+
+tests/principles/principles.test.ts:
+  Seed 3 test principles (last_shown: null).
+  Test 1: GET /api/principles/today -> returns principle, updates last_shown to today.
+  Test 2: Same call twice same day -> same _id returned, last_shown only updated once (idempotent).
+  Test 3: All principles last_shown = today -> returns oldest last_shown one (fallback).
+  Test 4: Empty principles collection -> returns { principle: null } status 200.
+
+tests/notebook/notebook.test.ts:
+  Seed 1 test topic { title: 'Test Topic', icon: '📝', color: 'indigo' }.
+  Test 1: GET /api/notebook/topics -> returns seeded topic.
+  Test 2: POST /api/notebook/topics valid -> 201, entry_count: 0.
+  Test 3: POST /api/notebook/topics missing title -> 400.
+  Test 4: POST /api/notebook/topics/[id]/entries valid -> 201, entry_count++, last_entry_on updated.
+  Test 5: POST entries with empty body -> 400.
+  Test 6: PATCH /api/notebook/entries/[id] -> body updated.
+  Test 7: DELETE /api/notebook/entries/[id] -> deleted, topic entry_count--.
+  Test 8: DELETE /api/notebook/topics/[id] -> topic deleted + cascade entries deleted.
+  Test 9: DELETE nonexistent topic -> 404.
+
+Comments explaining:
+  - Why entry_count is cached (avoids COUNT per topic on list render)
+  - Why body has 5000 hard DB cap but 2000 soft UI warning
+  - Why cascade delete (orphaned entries are invisible waste)
+  - Why learningsTopicId is fetched via SWR not hardcoded (IDs differ across DBs)
+```
+
+---
+
+### Phase 4 / Step 12 — Final Verification
+
+**The Prompt:**
+
+```
+Final Phase 4 verification for LifeOS.
+
+Run: npx tsc --noEmit
+Run: npx jest tests/principles/ tests/notebook/ tests/queues/
+
+Fix any TypeScript errors or failing tests before reporting done.
+
+Manual checklist:
+  1. Fill PRINCIPLES array in scripts/seedPrinciples.ts then run it.
+  2. Run scripts/seedNotebookTopics.ts.
+  3. npm run dev - morning dashboard shows PrincipleCard between greeting and plan.
+  4. /notebook loads 4 default topics.
+  5. Create topic + add 3 entries -> entry_count shows 3, last_entry_on shows today.
+  6. Edit entry -> character counter appears at 1800+ chars (amber), 2000+ (rose).
+  7. Mark a queue topic as covered -> "Save to Notebook" CTA appears.
+  8. Night check-in with a queue_topic entry marked done -> "Save to Notebook" prompt shows.
+  9. Mobile nav shows exactly 5 items: Home, Tasks, Challenges, Notebook, Settings.
+  10. Dashboard morning bottom has "View weekly insights" link.
+  11. Dashboard evening top has "Tonight's Check-In" card.
+  12. /insights and /checkin still load correctly as direct URLs.
+
+Report any remaining issues.
+```

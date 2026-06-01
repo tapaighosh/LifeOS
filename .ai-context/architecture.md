@@ -118,6 +118,16 @@ active          → true | false (soft delete)
 | GET | `/api/insights/pillars` | Pillar balance data |
 | GET | `/api/settings` | Get user settings |
 | PATCH | `/api/settings` | Update user settings |
+| GET | `/api/principles/today` | Fetch today's rotating principle |
+| GET | `/api/notebook/topics` | List all active notebook topics |
+| POST | `/api/notebook/topics` | Create a new topic |
+| PATCH | `/api/notebook/topics/[id]` | Update topic (title, icon, color, pinned) |
+| DELETE | `/api/notebook/topics/[id]` | Cascade-delete topic and all its entries |
+| GET | `/api/notebook/topics/[id]/entries` | List latest 50 entries for a topic |
+| POST | `/api/notebook/topics/[id]/entries` | Add entry; updates topic entry_count + last_entry_on |
+| PATCH | `/api/notebook/entries/[id]` | Update an entry (body, source, tags) |
+| DELETE | `/api/notebook/entries/[id]` | Delete entry; decrements topic entry_count |
+| GET | `/api/revision/queue` | List RevisionQueue items due today (capped at 3) |
 
 ---
 
