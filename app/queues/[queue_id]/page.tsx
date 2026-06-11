@@ -4,7 +4,9 @@
  * /queues/[queue_id] — Queue detail page (Client Component)
  *
  * Three tabs: Pending | Covered | Skipped
- * - Pending/Skipped tabs: draggable QueueItemList
+ * - Pending tab: draggable QueueItemList (items with skip_count === 0)
+ * - Skipped tab: special view — pending items where skip_count > 0
+ *   Each shows a warning badge + "Mark Done" / "Move to Top" action buttons
  * - Covered tab: locked list (no drag), shows covered_on date
  * - Fixed bottom "+ Add Topic" button opens AddTopicDrawer
  */
@@ -12,7 +14,7 @@
 import { useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { ArrowLeft, BookOpen, Code2, Plus } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Plus, CheckCircle, ArrowUpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QueueItemList } from '@/components/queues/QueueItemList';
 import { TopicItemCard } from '@/components/queues/TopicItemCard';
@@ -41,6 +43,109 @@ const pillarBarFill: Record<string, string> = {
   curiosity: 'bg-blue-400',
   soul: 'bg-rose-400',
 };
+
+// ─── Skipped Item Row ─────────────────────────────────────────────────────────
+
+function SkippedItemRow({
+  item,
+  queueId,
+  onUpdate,
+}: {
+  item: ITopicItem & { _id: string };
+  queueId: string;
+  onUpdate: () => void;
+}) {
+  const [loading, setLoading] = useState<'done' | 'top' | null>(null);
+  const skipCount = item.skip_count ?? 0;
+
+  async function handleMarkDone() {
+    setLoading('done');
+    try {
+      await fetch(`/api/queues/${queueId}/items/${item._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'covered' }),
+      });
+      onUpdate();
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function handleMoveToTop() {
+    setLoading('top');
+    try {
+      await fetch(`/api/queues/${queueId}/items/${item._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move_to_top' }),
+      });
+      onUpdate();
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-colors">
+      {/* Item header row */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Skip count badge */}
+        <span
+          className={cn(
+            'shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border',
+            skipCount >= 2
+              ? 'bg-amber-500/15 text-amber-400 border-amber-500/25'
+              : 'bg-zinc-800 text-zinc-400 border-zinc-700/50'
+          )}
+        >
+          {skipCount === 1 ? '⚠ skipped 1 time' : `⚠ skipped ${skipCount} times`}
+        </span>
+
+        {/* Title */}
+        <span className="flex-1 text-sm font-medium text-zinc-200 leading-snug">
+          {item.title}
+        </span>
+
+        {/* Difficulty badge */}
+        <span
+          className={cn(
+            'shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded',
+            item.difficulty === 'easy'
+              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+              : item.difficulty === 'medium'
+              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/25'
+              : 'bg-rose-500/15 text-rose-400 border border-rose-500/25'
+          )}
+        >
+          {item.difficulty[0]}
+        </span>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2 px-4 pb-3">
+        <button
+          onClick={handleMarkDone}
+          disabled={loading !== null}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/25 transition-colors disabled:opacity-50"
+        >
+          <CheckCircle className="w-3.5 h-3.5" />
+          {loading === 'done' ? 'Saving…' : 'Mark Done'}
+        </button>
+        <button
+          onClick={handleMoveToTop}
+          disabled={loading !== null}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/25 transition-colors disabled:opacity-50"
+        >
+          <ArrowUpCircle className="w-3.5 h-3.5" />
+          {loading === 'top' ? 'Moving…' : 'Move to Top'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function QueueDetailPage() {
   const params = useParams<{ queue_id: string }>();
@@ -89,8 +194,6 @@ export default function QueueDetailPage() {
 
   const { queue, items } = data;
 
-  // Compute total + covered across all statuses by fetching progress separately
-  // For now, we show tab-filtered counts
   const isDsa = queue.queue_type === 'dsa';
 
   const totalItems = allData?.items.length ?? 0;
@@ -185,8 +288,26 @@ export default function QueueDetailPage() {
             ))
           )}
         </div>
+      ) : tab === 'skipped' ? (
+        // Skipped tab — special view with warning badges + action buttons
+        <div className="space-y-2">
+          {items.length === 0 ? (
+            <div className="text-center py-12 text-zinc-600 text-sm">
+              No skipped topics. Keep it up! 🎉
+            </div>
+          ) : (
+            items.map((item) => (
+              <SkippedItemRow
+                key={item._id}
+                item={item}
+                queueId={params.queue_id}
+                onUpdate={handleUpdate}
+              />
+            ))
+          )}
+        </div>
       ) : (
-        // Pending / Skipped — draggable
+        // Pending — draggable (skip_count === 0 items only, filtered server-side)
         <QueueItemList
           items={items}
           queueId={params.queue_id}

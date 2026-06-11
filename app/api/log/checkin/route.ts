@@ -194,16 +194,35 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Queue topic completion hook
-    // Runs after DayLog is committed. For each queue_topic entry in today's check-in,
-    // advance the queue: mark the item covered/skipped and promote the next pending item.
+    // Runs after DayLog is committed. For each queue_topic entry in today's check-in:
+    //   - 'done' → mark covered via advanceQueueItem
+    //   - anything else → increment skip_count and requeue at end (status stays pending)
     const queueEntries = (entries as any[]).filter(
       (e) => e.entry_type === 'queue_topic'
     );
     for (const entry of queueEntries) {
       try {
         if (!entry.topic_item_id) continue;
-        const itemStatus = entry.status === 'done' ? 'covered' : 'skipped';
-        await advanceQueueItem(entry.topic_item_id.toString(), itemStatus, date);
+        if (entry.status === 'done') {
+          await advanceQueueItem(entry.topic_item_id.toString(), 'covered', date);
+        } else {
+          // Skip: increment skip_count, stay pending, requeue at end
+          const TopicItem = (await import('@/models/TopicItem')).default;
+          const skippedItem = await TopicItem.findById(entry.topic_item_id.toString());
+          if (skippedItem) {
+            const maxOrderItem = await TopicItem.findOne({
+              queue_id: skippedItem.queue_id,
+              status: 'pending',
+            })
+              .sort({ order: -1 })
+              .lean();
+            const newOrder = (maxOrderItem?.order ?? 0) + 1;
+            await TopicItem.findByIdAndUpdate(entry.topic_item_id.toString(), {
+              $inc: { skip_count: 1 },
+              $set: { last_skipped_on: date, order: newOrder },
+            });
+          }
+        }
       } catch (queueErr) {
         // Queue hook errors must never break the check-in submission
         console.error('[checkin] queue hook error:', queueErr);
