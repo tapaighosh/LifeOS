@@ -5,7 +5,8 @@
  * a TopicQueue. Items are ordered and surface one at a time into the daily plan.
  *
  * Status flow:
- *   pending → in_progress (when surfaced in plan) → covered | skipped
+ *   pending → in_progress (when surfaced in plan) → covered
+ *   Skipping increments skip_count and requeues at the END (status stays pending).
  *
  * DSA-only fields (approach_notes, time_taken, solved_without_hint) are optional
  * and only relevant for queue_type='dsa' queues. They capture honest interview
@@ -25,14 +26,17 @@ export interface ITopicItem extends Document {
   title: string;
   order: number;
   status: 'pending' | 'in_progress' | 'covered' | 'skipped';
-  covered_on?: string;       // YYYY-MM-DD
+  covered_on?: string;        // YYYY-MM-DD
   revision: boolean;
-  next_revision?: string;   // YYYY-MM-DD
+  next_revision?: string;    // YYYY-MM-DD
   notes?: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  // Skip tracking — status stays 'pending'; skip_count > 0 means skipped
+  skip_count: number;
+  last_skipped_on: string | null; // YYYY-MM-DD
   // DSA-only optional fields
   approach_notes?: string;
-  time_taken?: number;       // minutes
+  time_taken?: number;        // minutes
   solved_without_hint?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -80,6 +84,9 @@ const TopicItemSchema: Schema<ITopicItem> = new Schema(
       },
       required: [true, 'Difficulty is required'],
     },
+    // Skip tracking
+    skip_count: { type: Number, default: 0 },
+    last_skipped_on: { type: String, default: null },
     // DSA-only fields — all optional
     approach_notes: { type: String },
     time_taken: { type: Number, min: 0, max: 600 },

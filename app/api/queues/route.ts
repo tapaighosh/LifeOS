@@ -25,12 +25,13 @@ export async function GET() {
     // Attach progress counts for each queue
     const result = await Promise.all(
       queues.map(async (queue) => {
-        const [covered, pending, skipped, inProgress] = await Promise.all([
+        const [covered, inProgress, skipped] = await Promise.all([
           TopicItem.countDocuments({ queue_id: queue._id, status: 'covered' }),
-          TopicItem.countDocuments({ queue_id: queue._id, status: 'pending' }),
-          TopicItem.countDocuments({ queue_id: queue._id, status: 'skipped' }),
           TopicItem.countDocuments({ queue_id: queue._id, status: 'in_progress' }),
+          // 'Skipped' = pending items where skip_count > 0
+          TopicItem.countDocuments({ queue_id: queue._id, status: 'pending', skip_count: { $gt: 0 } }),
         ]);
+        const pending = await TopicItem.countDocuments({ queue_id: queue._id, status: 'pending' });
 
         return {
           queue,
@@ -39,7 +40,7 @@ export async function GET() {
             pending,
             skipped,
             in_progress: inProgress,
-            total: covered + pending + skipped + inProgress,
+            total: covered + pending + inProgress,
           },
         };
       })

@@ -26,7 +26,12 @@ export const topicItemCreateSchema = z.object({
 export type TopicItemCreate = z.infer<typeof topicItemCreateSchema>;
 
 export const topicItemUpdateSchema = z.object({
+  // status: 'covered' sets item done; 'skip' is handled via action field below.
+  // 'skipped' kept for backward-compat only (legacy data).
   status: z.enum(['covered', 'skipped']).optional(),
+  // action: 'skip' increments skip_count and requeues at end of pending
+  // action: 'move_to_top' sets sort_order to front of pending
+  action: z.enum(['skip', 'move_to_top']).optional(),
   notes: z.string().max(2000, 'Notes cannot exceed 2000 characters').optional(),
   revision: z.boolean().optional(),
   // DSA-only fields
