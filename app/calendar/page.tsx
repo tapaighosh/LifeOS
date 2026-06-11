@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/Button';
 import { Loader2, Plus, Calendar as CalIcon } from 'lucide-react';
 
 export default function CalendarPage() {
-  const [events, setEvents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [upcoming, setUpcoming] = useState<any[]>([]);
+  const [past, setPast]         = useState<any[]>([]);
+  const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
 
   const fetchEvents = async () => {
@@ -16,10 +17,12 @@ export default function CalendarPage() {
     try {
       const res = await fetch('/api/events');
       const data = await res.json();
-      if (Array.isArray(data)) {
-        setEvents(data);
+      if (data && Array.isArray(data.upcoming)) {
+        setUpcoming(data.upcoming);
+        setPast(data.past ?? []);
       } else {
-        setEvents([]);
+        setUpcoming([]);
+        setPast([]);
         console.error('Failed to load events:', data);
       }
     } catch (e) {
@@ -52,6 +55,9 @@ export default function CalendarPage() {
   const daysInMonth = lastDay.getDate();
   const startingDay = firstDay.getDay(); // 0 = Sunday
 
+  // Combined list for grid overlay (order doesn't matter for the grid)
+  const allEvents = [...upcoming, ...past];
+
   const calendarCells = [];
   // Empty cells before start
   for (let i = 0; i < startingDay; i++) {
@@ -62,7 +68,7 @@ export default function CalendarPage() {
   for (let i = 1; i <= daysInMonth; i++) {
     const currentCellDate = new Date(year, month, i);
     // Find events overlapping with this day
-    const dayEvents = events.filter(ev => {
+    const dayEvents = allEvents.filter(ev => {
       const start = new Date(ev.date_start);
       const end = new Date(ev.date_end);
       // Strip time
@@ -122,21 +128,33 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Event List */}
+      {/* ── Upcoming Events ── */}
       <div className="space-y-4">
         <h2 className="text-lg font-bold text-zinc-200 border-b border-zinc-800 pb-2">Upcoming Events</h2>
         {loading ? (
           <div className="flex justify-center p-4"><Loader2 className="animate-spin text-zinc-500" /></div>
-        ) : events.length === 0 ? (
-          <p className="text-sm text-zinc-500">No events scheduled.</p>
+        ) : upcoming.length === 0 ? (
+          <p className="text-sm text-zinc-500">No upcoming events.</p>
         ) : (
           <div className="space-y-3">
-            {events.map(ev => (
+            {upcoming.map(ev => (
               <EventCard key={ev._id} event={ev} onDelete={handleDelete} />
             ))}
           </div>
         )}
       </div>
+
+      {/* ── Past Events (hidden when empty) ── */}
+      {!loading && past.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-bold text-zinc-200 border-b border-zinc-800 pb-2">Past Events</h2>
+          <div className="space-y-3 opacity-60">
+            {past.map(ev => (
+              <EventCard key={ev._id} event={ev} onDelete={handleDelete} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

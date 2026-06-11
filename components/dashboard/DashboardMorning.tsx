@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Sparkles, Plus, Zap, Trophy, TrendingUp, Layers, BatteryCharging, ChevronRight } from 'lucide-react';
+import { Sparkles, Plus, Zap, Trophy, TrendingUp, Layers, BatteryCharging, ChevronRight, CalendarDays } from 'lucide-react';
 import { DayPlan } from '@/components/plan/DayPlan';
 import ChallengeMiniCard from '@/components/challenges/ChallengeMiniCard';
 import PillarHealthBar from '@/components/dashboard/PillarHealthBar';
@@ -49,6 +49,17 @@ export default function DashboardMorning({ data, userName }: Props) {
   const { data: principleData } = useSWR<{
     principle: { heading: string; body: string } | null;
   }>('/api/principles/today', fetcher);
+
+  // ── Upcoming Events (max 2, hidden when empty) ──────────────────────────
+  type IEventBlock = { _id: string; label: string; date_start: string; date_end: string; type: string; };
+  const { data: eventsData } = useSWR<{ upcoming: IEventBlock[]; past: IEventBlock[] }>('/api/events', fetcher);
+  const upcomingEvents = eventsData?.upcoming?.slice(0, 2) ?? [];
+
+  function daysUntil(dateStr: string): number {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d     = new Date(dateStr); d.setHours(0, 0, 0, 0);
+    return Math.round((d.getTime() - today.getTime()) / 86400000);
+  }
 
   const today = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -132,7 +143,7 @@ export default function DashboardMorning({ data, userName }: Props) {
           </Link>
         </div>
 
-        {/* ─ 3. Today's Principle ─ */}
+        {/* ── 3. Today's Principle ── */}
         {principleData === undefined ? (
           <PrincipleCardSkeleton />
         ) : principleData.principle ? (
@@ -142,7 +153,28 @@ export default function DashboardMorning({ data, userName }: Props) {
           />
         ) : null}
 
-        {/* ─ 3. Revision Queue (auto-hides when empty) ─ */}
+        {/* ── Upcoming Events widget (hidden when empty) ── */}
+        {upcomingEvents.length > 0 && (
+          <div className="rounded-2xl border border-zinc-700/50 bg-zinc-800/50 p-4 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" />
+              Upcoming
+            </p>
+            {upcomingEvents.map(ev => {
+              const days  = daysUntil(ev.date_start);
+              const label = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
+              return (
+                <div key={ev._id} className="flex items-center gap-2 text-sm text-zinc-200">
+                  <span className="text-base">📅</span>
+                  <span className="flex-1 truncate">{ev.label}</span>
+                  <span className="text-xs text-zinc-400 shrink-0">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── 3. Revision Queue (auto-hides when empty) ── */}
         <RevisionQueueWidget />
 
         {/* ─ 4. Energy Forecast ─ */}
