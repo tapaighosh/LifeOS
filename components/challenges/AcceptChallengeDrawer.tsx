@@ -56,12 +56,12 @@ export default function AcceptChallengeDrawer({ item, onClose, onSuccess }: Prop
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
         onClick={onClose}
       />
 
       {/* Drawer */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950 border-t border-zinc-800 rounded-t-3xl p-6 pb-safe animate-slide-up">
+      <div className="fixed bottom-0 left-0 right-0 z-[51] bg-zinc-950 border-t border-zinc-800 rounded-t-3xl p-6 pb-8 animate-slide-up max-h-[85vh] overflow-y-auto">
         {/* Handle */}
         <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mb-6" />
 

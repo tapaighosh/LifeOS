@@ -31,19 +31,21 @@ export async function GET(
       return NextResponse.json({ error: 'Queue not found', code: 'NOT_FOUND' }, { status: 404 });
     }
 
-    // Build status filter based on tab
-    const statusMap: Record<string, string | string[]> = {
-      pending: 'pending',
-      covered: 'covered',
-      skipped: 'skipped',
-      in_progress: 'in_progress',
-      all: ['pending', 'in_progress', 'covered', 'skipped'],
-    };
-
-    const statusFilter = statusMap[tab] ?? ['pending', 'in_progress', 'covered', 'skipped'];
-    const filter = Array.isArray(statusFilter)
-      ? { queue_id, status: { $in: statusFilter } }
-      : { queue_id, status: statusFilter };
+    // Build query filter based on tab
+    // 'skipped' tab = pending items where skip_count > 0 (status stays 'pending' after skip)
+    let filter: Record<string, unknown>;
+    if (tab === 'pending') {
+      filter = { queue_id, status: 'pending', $or: [{ skip_count: 0 }, { skip_count: { $exists: false } }] };
+    } else if (tab === 'covered') {
+      filter = { queue_id, status: 'covered' };
+    } else if (tab === 'skipped') {
+      filter = { queue_id, status: 'pending', skip_count: { $gt: 0 } };
+    } else if (tab === 'in_progress') {
+      filter = { queue_id, status: 'in_progress' };
+    } else {
+      // 'all' — include every item
+      filter = { queue_id };
+    }
 
     const items = await TopicItem.find(filter).sort({ order: 1 }).lean();
 

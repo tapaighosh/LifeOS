@@ -2131,3 +2131,471 @@ Manual checklist:
 
 Report any remaining issues.
 ```
+
+---
+
+## Phase 5 — Bug Fix Sprint
+
+> **Decisions locked in:**
+> - Queue topics completed in daily plan MUST count toward dashboard completion stats.
+> - Calendar splits into two explicit sections: Upcoming (date_end >= today) and Past (date_end < today, descending).
+> - Dashboard morning adds an Upcoming Events widget (max 2 events, hidden when empty).
+> - Challenge progress is NEVER auto-cleared when no plan is generated. Night check-in always works, plan or no plan.
+> - Skipped queue topics stay in `pending` status — skip just increments a counter. No dead-end "skipped" bucket.
+> - Challenge activation modal must be scrollable with padding-bottom so the button is never hidden.
+>
+> **Fix priority order:** Bug 5 ? Bug 2 ? Bug 4 ? Bug 3 ? Bug 1
+
+---
+
+### Phase 5 / Step 1 — Bug 5: Challenge Activation Modal CSS
+
+**What it does:** Fixes the challenge activation popup so it is centered and its CTA button is always visible.
+**Files modified:** `components/ui/Modal.tsx` (or the specific challenge activation modal component)
+**How to verify:** Open any challenge ? tap "Activate" ? modal appears centered on screen, button visible without scrolling.
+
+**The Prompt:**
+
+```
+Fix the challenge activation modal in LifeOS — it is not centered and the button is hidden below the fold.
+
+Locate the modal component used by the challenge activation flow. It may be:
+  components/ui/Modal.tsx
+  components/challenges/AcceptChallengeDrawer.tsx
+  or wherever the challenge "Start Challenge" popup renders.
+
+Apply these CSS fixes to the modal OVERLAY (the backdrop element):
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.5);
+
+Apply these CSS fixes to the modal CONTENT BOX (the white/dark card inside):
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 90%;
+  max-width: 480px;
+  border-radius: 16px;
+  padding-bottom: 24px;   /* ? this is the critical fix — button was below fold */
+
+Rules:
+  - Do NOT change any existing logic, button handlers, or submit behavior.
+  - Do NOT change any other modal in the app — only the challenge activation modal.
+  - If the modal already uses Tailwind classes, convert the above values to their Tailwind equivalents:
+      inset-0, flex, items-center, justify-center, z-50, bg-black/50,
+      max-h-[90vh], overflow-y-auto, w-[90%], max-w-[480px], rounded-2xl, pb-6
+  - After the fix: the modal should center both horizontally and vertically, and the button should always be tappable.
+
+Run npx tsc --noEmit — confirm 0 errors.
+```
+
+---
+
+### Phase 5 / Step 2 — Bug 2: Calendar Date Query + Dashboard Upcoming Events Widget
+
+**What it does:** Fixes the events API to split upcoming vs past correctly. Adds an Upcoming Events widget to the morning dashboard.
+**Files modified:** `app/api/events/route.ts`, `components/dashboard/DashboardMorning.tsx`, `app/events/page.tsx` (or wherever the calendar screen renders)
+**How to verify:** Open /events — upcoming events are sorted date ascending, past events are sorted date descending, never mixed. Dashboard morning shows max 2 upcoming events between the principle card and today's plan.
+
+**The Prompt:**
+
+```
+Fix the LifeOS events calendar query and add an upcoming events widget to the morning dashboard.
+
+--- PART 1: Fix app/api/events/route.ts ----------------------------------------
+
+Replace the existing events GET query with two separate queries:
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [upcomingEvents, pastEvents] = await Promise.all([
+    EventBlock.find({ date_end: { $gte: todayStart } })
+      .sort({ date_start: 1 })
+      .lean(),
+    EventBlock.find({ date_end: { $lt: todayStart } })
+      .sort({ date_start: -1 })
+      .lean(),
+  ]);
+
+  return NextResponse.json({ upcoming: upcomingEvents, past: pastEvents });
+
+Why date_end not date_start: A multi-day event that started yesterday but ends tomorrow is still upcoming.
+Why ascending for upcoming, descending for past: next event first; most-recent past event first.
+
+--- PART 2: Fix the Calendar screen component -----------------------------------
+
+Find the component that renders the /events or calendar page. Update it to:
+  1. Consume { upcoming, past } from the API response (not a flat list).
+  2. Render two sections in this order:
+       UPCOMING EVENTS  (date ascending — already sorted by API)
+       PAST EVENTS      (date descending — already sorted by API)
+  3. Each section heading should be clear: "Upcoming Events" / "Past Events".
+  4. Empty state per section: if upcoming is empty, show "No upcoming events." If past is empty, show nothing (omit the past section entirely).
+  5. Never mix upcoming and past events in the same list.
+
+--- PART 3: Add Upcoming Events widget to DashboardMorning.tsx -----------------
+
+In components/dashboard/DashboardMorning.tsx:
+
+  1. Fetch upcoming events:
+       const { data: eventsData } = useSWR<{ upcoming: IEventBlock[]; past: IEventBlock[] }>('/api/events', fetcher);
+       const upcomingEvents = eventsData?.upcoming?.slice(0, 2) ?? [];
+
+  2. Add an IEventBlock type import from models/EventBlock.ts or define inline:
+       type IEventBlock = { _id: string; title: string; date_start: string; date_end: string; emoji?: string; };
+
+  3. Compute "days until" helper:
+       function daysUntil(dateStr: string): number {
+         const today = new Date(); today.setHours(0,0,0,0);
+         const d = new Date(dateStr); d.setHours(0,0,0,0);
+         return Math.round((d.getTime() - today.getTime()) / 86400000);
+       }
+
+  4. Insert the Upcoming Events widget BETWEEN the PrincipleCard and the Today's Plan section.
+     Only render the widget when upcomingEvents.length > 0. If empty, render nothing (no empty widget).
+
+     Widget structure (Tailwind):
+       <div className="rounded-2xl border border-zinc-700/50 bg-zinc-800/50 p-4 space-y-2">
+         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Upcoming</p>
+         {upcomingEvents.map(ev => {
+           const days = daysUntil(ev.date_start);
+           const label = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
+           return (
+             <div key={ev._id} className="flex items-center gap-2 text-sm text-zinc-200">
+               <span>{ev.emoji ?? '??'}</span>
+               <span className="flex-1 truncate">{ev.title}</span>
+               <span className="text-xs text-zinc-400 shrink-0">{label}</span>
+             </div>
+           );
+         })}
+       </div>
+
+  5. For same-day events (days === 0): the label shows "today" — same widget, no special section needed.
+     The "TODAY" distinction from the product spec is handled by the label text, not a separate widget.
+
+  6. Do NOT change any other section of DashboardMorning.tsx. Do NOT touch DashboardEvening.tsx.
+
+Run npx tsc --noEmit — confirm 0 errors.
+```
+
+---
+
+### Phase 5 / Step 3 — Bug 4: Skip Count Logic for Queue Topics
+
+**What it does:** Replaces the broken skip-to-dead-end behavior with a reversible skip_count system. Skipped topics stay pending and resurface naturally.
+**Files modified:** `models/TopicItem.ts`, `app/api/queues/[queue_id]/items/[item_id]/route.ts`, `components/queues/QueueItemList.tsx` or wherever the skipped view renders
+**How to verify:** Skip a topic ? it stays in pending, skip_count = 1. Skip again ? skip_count = 2. Topics with skip_count >= 3 show a ?? indicator. Skipped section shows filtered pending items with skip_count > 0.
+
+**The Prompt:**
+
+```
+Implement skip_count logic for queue topic items in LifeOS.
+
+--- PART 1: Update models/TopicItem.ts -----------------------------------------
+
+Add two new fields to the TopicItem Mongoose schema and TypeScript interface:
+  skip_count:      { type: Number, default: 0 }
+  last_skipped_on: { type: String, default: null }  // ISO date string YYYY-MM-DD
+
+Update the ITopicItem interface to include:
+  skip_count: number;
+  last_skipped_on: string | null;
+
+Do NOT change any existing fields.
+
+--- PART 2: Update the skip PATCH handler ---------------------------------------
+
+In app/api/queues/[queue_id]/items/[item_id]/route.ts (the PATCH handler):
+
+When action === 'skip':
+  OLD behavior (remove): moving item to a "skipped" status bucket.
+  NEW behavior:
+    1. Keep status as 'pending' — do NOT change it to 'skipped'.
+    2. Increment skip_count by 1:
+         await TopicItem.findByIdAndUpdate(item_id, {
+           $inc: { skip_count: 1 },
+           $set: { last_skipped_on: new Date().toISOString().split('T')[0] },
+         });
+    3. Move the item to the END of the pending queue (sort_order = max existing sort_order + 1).
+       Find: const maxOrder = await TopicItem.findOne({ queue_id, status: 'pending' }).sort({ sort_order: -1 }).lean();
+       Set: sort_order = (maxOrder?.sort_order ?? 0) + 1
+    4. The next in_progress item: do NOT auto-advance. The queue engine surfaces the next pending item on next load.
+
+--- PART 3: Update the Skipped view in the Queue UI ----------------------------
+
+In the queue item list component (components/queues/QueueItemList.tsx or the relevant component):
+
+  1. The "Skipped" filter/tab should query for: pending items where skip_count > 0.
+     Do NOT maintain a separate "skipped" status — just filter pending by skip_count > 0.
+
+  2. Each skipped item shows a warning badge:
+       skip_count === 1 ? "? skipped 1 time"
+       skip_count >= 2 ? "? skipped {N} times"
+
+  3. In the full pending list, items with skip_count >= 3 show a subtle visual indicator:
+       Add a small amber dot or "?" icon next to the title. Keep it subtle — not aggressive.
+
+  4. Tapping a skipped item in the skipped view offers two actions:
+       [Mark Done]         ? sets status = 'covered', covered_on = today
+       [Move to Top]       ? sets sort_order = 0 (or min existing - 1), brings it to top of pending queue for tomorrow
+
+  5. Remove any UI or code that sets status to the literal string 'skipped'.
+     Replace all status === 'skipped' checks with: status === 'pending' && skip_count > 0
+
+Run npx tsc --noEmit — confirm 0 errors.
+```
+
+---
+
+### Phase 5 / Step 4 — Bug 3: Night Check-In Without a Generated Plan
+
+**What it does:** Makes the night check-in functional even when no plan was generated that day. Challenge progress is never auto-cleared. Check-in shows a manual challenge completion section when no plan exists.
+**Files modified:** `app/api/log/checkin/route.ts`, `components/checkin/CheckInForm.tsx`, `models/DailyPlan.ts` (if plan absence check is there)
+**How to verify:** Without generating a plan, open /checkin ? form loads, shows "No plan generated today" message ? shows active challenges with Done/Skip toggles ? submitting updates challenge progress correctly.
+
+**The Prompt:**
+
+```
+Fix LifeOS night check-in so it works correctly when no daily plan was generated.
+
+--- PART 1: Never auto-clear challenge progress ---------------------------------
+
+Search the entire codebase for any logic that resets, clears, or skips challenge progress when:
+  - No DailyPlan exists for today
+  - plan_generated === false or similar flag
+  - Daily plan entries array is empty
+
+Remove or disable that auto-clear logic entirely.
+Challenge progress (streak, completed_days, status) should ONLY change when the user explicitly acts on it.
+
+--- PART 2: Update app/api/log/checkin/route.ts ---------------------------------
+
+The check-in POST handler currently assumes a daily plan exists. Make it plan-optional:
+
+  1. Fetch today's DailyPlan (if any):
+       const todayStr = new Date().toISOString().split('T')[0];
+       const dailyPlan = await DailyPlan.findOne({ date: todayStr }).lean();
+       const hasPlan = !!dailyPlan;
+
+  2. If hasPlan: process entries as before (mark tasks done, mark queue topics covered, etc.)
+
+  3. If !hasPlan: skip the plan-entry processing block entirely. Do NOT error out.
+
+  4. Always process challenge updates regardless of hasPlan:
+       For each challenge_entry in req.body.challenge_updates:
+         { challenge_id, action: 'done' | 'skip' }
+         If action === 'done': increment challenge.completed_days, update streak, check if target_days reached.
+         If action === 'skip': log the skip but do NOT reset streak or progress.
+
+  5. The response always returns { success: true, stats: { ... } } — never 404 due to missing plan.
+
+--- PART 3: Update components/checkin/CheckInForm.tsx --------------------------
+
+  1. Detect plan absence:
+       const hasPlan = !!checkInData?.plan_entries?.length;  // or from API response flag
+
+  2. When !hasPlan, show this section ABOVE the energy/mood section:
+
+       <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+         <p className="text-sm font-semibold text-zinc-200">No plan was generated today.</p>
+         <p className="text-xs text-zinc-400">Did you complete any active challenges?</p>
+         {activeChallenges.map(challenge => (
+           <div key={challenge._id} className="flex items-center justify-between">
+             <span className="text-sm text-zinc-200 flex items-center gap-2">
+               <span>{challenge.emoji}</span> {challenge.title}
+             </span>
+             <div className="flex gap-2">
+               <button onClick={() => setChallengeAction(challenge._id, 'done')}
+                 className={`text-xs px-3 py-1 rounded-full border transition-colors
+                   ${challengeActions[challenge._id] === 'done'
+                     ? 'bg-emerald-500 border-emerald-500 text-white'
+                     : 'border-zinc-600 text-zinc-400 hover:border-emerald-500'}`}>
+                 Done
+               </button>
+               <button onClick={() => setChallengeAction(challenge._id, 'skip')}
+                 className={`text-xs px-3 py-1 rounded-full border transition-colors
+                   ${challengeActions[challenge._id] === 'skip'
+                     ? 'bg-zinc-700 border-zinc-600 text-zinc-400'
+                     : 'border-zinc-600 text-zinc-400'}`}>
+                 Skip
+               </button>
+             </div>
+           </div>
+         ))}
+       </div>
+
+  3. Fetch active challenges:
+       const { data: challengesData } = useSWR<{ challenges: IChallenge[] }>('/api/challenges', fetcher);
+       const activeChallenges = challengesData?.challenges?.filter(c => c.status === 'active') ?? [];
+
+  4. State for challenge actions:
+       const [challengeActions, setChallengeActionsMap] = useState<Record<string, 'done' | 'skip' | undefined>>({});
+       function setChallengeAction(id: string, action: 'done' | 'skip') {
+         setChallengeActionsMap(prev => ({ ...prev, [id]: prev[id] === action ? undefined : action }));
+       }
+
+  5. On form submit: include challenge_updates in the POST body:
+       challenge_updates: Object.entries(challengeActions)
+         .filter(([, action]) => action !== undefined)
+         .map(([challenge_id, action]) => ({ challenge_id, action }))
+
+  6. When hasPlan is true: keep existing behavior — no challenge section shown, existing plan entries shown as normal.
+
+  7. The submit button shows and works in both cases (plan present or absent).
+
+Run npx tsc --noEmit — confirm 0 errors.
+```
+
+---
+
+### Phase 5 / Step 5 — Bug 1: Queue Topic Completion Counting in Dashboard
+
+**What it does:** Makes queue topics stored in daily_plans count as completable tasks. Dashboard stats count ALL done entries regardless of task_id.
+**Files modified:** `models/DailyPlan.ts`, `app/api/log/checkin/route.ts`, `app/api/dashboard/morning/route.ts` or wherever dashboard stats are computed
+**How to verify:** Complete a queue topic in check-in ? dashboard completion counter increments. topic_items[topic_item_id].status = 'covered' after check-in.
+
+**The Prompt:**
+
+```
+Fix queue topic completion counting in LifeOS daily plan and dashboard stats.
+
+--- PART 1: Update models/DailyPlan.ts -----------------------------------------
+
+The plan_entries array subdocument schema needs two new optional fields:
+  topic_item_id: { type: String, default: null }   // links to topic_items collection
+  type:          { type: String, default: 'task', enum: ['task', 'queue_topic', 'recharge'] }
+
+Update the IPlanEntry TypeScript interface to include:
+  topic_item_id?: string | null;
+  type: 'task' | 'queue_topic' | 'recharge';
+
+Existing entries without a type default to 'task' — no migration needed.
+
+--- PART 2: Update daily plan generation to store queue topics correctly --------
+
+Find where daily plan entries are created (likely app/api/plans/generate/route.ts or lib/scheduler/).
+When a queue topic item is added to the day's plan, store it as:
+  {
+    task_id: null,
+    topic_item_id: item._id.toString(),
+    title: item.title,
+    pillar: queue.pillar,         // from the parent TopicQueue
+    type: 'queue_topic',
+    status: 'pending',
+    duration_min: 20,             // default study block
+  }
+Do NOT generate a fake task_id. Leave task_id as null.
+
+--- PART 3: Update app/api/log/checkin/route.ts ---------------------------------
+
+In the post-save check-in logic that processes plan entries:
+
+After processing task entries (type === 'task'), add:
+  for (const entry of planEntries) {
+    if (entry.type === 'queue_topic' && entry.status === 'done' && entry.topic_item_id) {
+      // Mark the topic item as covered
+      await TopicItem.findByIdAndUpdate(entry.topic_item_id, {
+        $set: {
+          status: 'covered',
+          covered_on: todayStr,
+        },
+      });
+
+      // Advance the queue: set the next pending item in the same queue to in_progress
+      const coveredItem = await TopicItem.findById(entry.topic_item_id).lean();
+      if (coveredItem) {
+        const nextItem = await TopicItem.findOne({
+          queue_id: coveredItem.queue_id,
+          status: 'pending',
+        }).sort({ sort_order: 1 }).lean();
+        if (nextItem) {
+          await TopicItem.findByIdAndUpdate(nextItem._id, { $set: { status: 'in_progress' } });
+        }
+      }
+    }
+  }
+
+--- PART 4: Fix dashboard completion stats --------------------------------------
+
+Find where dashboard completion stats are computed. It may be in:
+  app/api/dashboard/morning/route.ts
+  app/api/dashboard/evening/route.ts
+  or a shared lib/stats utility.
+
+Find the query or calculation that counts completed tasks for today. It likely looks like:
+  OLD: plan.plan_entries.filter(e => e.task_id && e.status === 'done').length
+
+Replace with:
+  NEW: plan.plan_entries.filter(e => e.status === 'done').length
+       // Count ALL done entries — task, queue_topic, recharge — regardless of task_id
+
+Also update the total count:
+  OLD: plan.plan_entries.filter(e => e.task_id).length
+  NEW: plan.plan_entries.length
+
+Do this in EVERY place completion ratio is calculated, not just one.
+
+--- PART 5: Update completion percentage display --------------------------------
+
+If the dashboard shows a completion percentage (e.g. "3 / 5 tasks done"):
+  Ensure it uses the updated counts from Part 4.
+  The label can change from "tasks done" to "done today" since it now includes queue topics.
+
+Run npx tsc --noEmit — confirm 0 errors.
+```
+
+---
+
+### Phase 5 / Step 6 — Final Verification
+
+**The Prompt:**
+
+```
+Final Phase 5 verification for LifeOS bug fix sprint.
+
+Run: npx tsc --noEmit
+Run: npx jest tests/checkin/ tests/events/ tests/queues/ tests/challenges/
+
+Fix any TypeScript errors or failing tests before reporting done.
+
+Manual checklist:
+  Bug 5 — Modal:
+    1. Open any challenge ? tap activate/start ? modal is centered on screen.
+    2. Scroll inside the modal if content is tall ? the CTA button is always reachable.
+
+  Bug 2 — Calendar + Events Widget:
+    3. /events page: "Upcoming Events" section shows events with date_end >= today, sorted ascending.
+    4. /events page: "Past Events" section shows events with date_end < today, sorted descending.
+    5. No event appears in both sections.
+    6. Dashboard morning: if 1-2 upcoming events exist, the widget shows between PrincipleCard and Today's Plan.
+    7. Dashboard morning: if no upcoming events, the widget is completely hidden (no empty box).
+    8. Today's event shows label "today" in the widget.
+
+  Bug 4 — Skip Count:
+    9. Skip a queue topic ? it stays in the pending list (status still 'pending').
+    10. Skip again ? skip_count increments to 2, item moves to end of pending queue.
+    11. Skip 3 times ? a subtle ? indicator appears next to it in the queue list.
+    12. Skipped tab shows only pending items where skip_count > 0.
+    13. "Mark Done" from the skipped view marks the item covered.
+    14. "Move to Top" from the skipped view brings it to top of pending queue.
+
+  Bug 3 — Check-In Without Plan:
+    15. Without generating a plan today, open /checkin ? form loads without errors.
+    16. "No plan was generated today" message appears.
+    17. Active challenges are listed with Done/Skip toggles.
+    18. Submit check-in ? challenge progress updates correctly.
+    19. Challenge streak is NOT reset when no plan was generated.
+
+  Bug 1 — Queue Topic Completion:
+    20. Generate a plan that includes a queue topic.
+    21. In night check-in, mark the queue topic as done.
+    22. Submit check-in ? TopicItem in DB has status: 'covered', covered_on: today.
+    23. Dashboard completion counter counts the covered queue topic as done.
+    24. Completion ratio = (all done entries) / (all plan entries), not just task entries.
+
+Report any remaining issues.
+```

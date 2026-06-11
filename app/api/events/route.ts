@@ -13,9 +13,22 @@ export async function GET(request: NextRequest) {
     }
 
     await connectDB();
-    const events = await EventBlock.find().sort({ date_start: 1 }).lean();
 
-    return NextResponse.json(events, { status: 200 });
+    // Use date_end for the split: a multi-day event that started yesterday but ends
+    // tomorrow is still "upcoming". date_start would wrongly move it to past.
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [upcomingEvents, pastEvents] = await Promise.all([
+      EventBlock.find({ date_end: { $gte: todayStart } })
+        .sort({ date_start: 1 })   // next event first
+        .lean(),
+      EventBlock.find({ date_end: { $lt: todayStart } })
+        .sort({ date_start: -1 })  // most-recent past event first
+        .lean(),
+    ]);
+
+    return NextResponse.json({ upcoming: upcomingEvents, past: pastEvents }, { status: 200 });
   } catch (error) {
     console.error('[GET /api/events]', error);
     return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });

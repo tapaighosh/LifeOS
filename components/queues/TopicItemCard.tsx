@@ -35,10 +35,12 @@ const difficultyStyles: Record<string, string> = {
   hard: 'bg-rose-500/15 text-rose-400 border border-rose-500/25',
 };
 
-function StatusIcon({ status }: { status: string }) {
+function StatusIcon({ status, skipCount }: { status: string; skipCount?: number }) {
   if (status === 'covered') return <Check className="w-4 h-4 text-emerald-400" />;
   if (status === 'in_progress') return <MoveRight className="w-4 h-4 text-indigo-400" />;
   if (status === 'skipped') return <Minus className="w-4 h-4 text-zinc-500" />;
+  // pending with skip_count > 0 — subtle amber minus
+  if (status === 'pending' && (skipCount ?? 0) > 0) return <Minus className="w-4 h-4 text-amber-500/80" />;
   return <Circle className="w-4 h-4 text-zinc-600" />;
 }
 
@@ -123,19 +125,25 @@ export function TopicItemCard({
           {item.difficulty[0]}
         </span>
 
-        {/* Title */}
+        {/* Title + optional high-skip indicator */}
         <span
           className={cn(
-            'flex-1 text-sm font-medium leading-snug',
+            'flex-1 flex items-center gap-1.5 text-sm font-medium leading-snug',
             isCovered ? 'text-zinc-500 line-through' : 'text-zinc-200'
           )}
         >
           {item.title}
+          {(item.skip_count ?? 0) >= 3 && !isCovered && (
+            <span
+              className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-500/70"
+              title={`Skipped ${item.skip_count} times`}
+            />
+          )}
         </span>
 
         {/* Status + chevron */}
         <span className="shrink-0 flex items-center gap-1.5">
-          <StatusIcon status={item.status} />
+          <StatusIcon status={item.status} skipCount={item.skip_count ?? 0} />
           {expanded ? (
             <ChevronUp className="w-3.5 h-3.5 text-zinc-600" />
           ) : (
