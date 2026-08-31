@@ -71,13 +71,13 @@ export function generatePlan(context: PlanContext) {
           planEntries.push({
             time_start: formatTime(currentTime),
             time_end: formatTime(endTime),
-            task_id: rechargeItem._id as mongoose.Types.ObjectId, // Bug A fix: use real RechargeItem._id
+            task_id: rechargeItem._id as mongoose.Types.ObjectId,
             title: `Recharge: ${rechargeItem.title}`,
             pillar: 'soul',
             type: 'recharge',
             energy_cost: 'low',
             status: 'pending',
-            entry_type: 'recharge', // Distinguishes break entries from real tasks
+            entry_type: 'recharge',
           });
           currentTime = endTime;
           remainingMinutes -= rechargeItem.duration;
@@ -115,7 +115,6 @@ export function generatePlan(context: PlanContext) {
   // Process Morning Slots
   const morningSlots = context.availableSlots.filter(s => s.period === 'morning');
   for (const slot of morningSlots) {
-    // Bug Fix 2: prefer favourite recharge items
     const favouritePool = context.rechargeMenu.filter((r) => (r as any).favourite);
     const rechargePool = favouritePool.length > 0 ? favouritePool : context.rechargeMenu;
     const recharge = rechargePool.length > 0
@@ -127,7 +126,6 @@ export function generatePlan(context: PlanContext) {
   // Process Evening Slots
   const eveningSlots = context.availableSlots.filter(s => s.period === 'evening');
   for (const slot of eveningSlots) {
-    // Bug Fix 2: prefer favourite recharge items
     const favouritePool = context.rechargeMenu.filter((r) => (r as any).favourite);
     const rechargePool = favouritePool.length > 0 ? favouritePool : context.rechargeMenu;
     const recharge = rechargePool.length > 0
@@ -143,11 +141,11 @@ export function generatePlan(context: PlanContext) {
     }
   }
 
-  // ─── Queue Topic Injection ────────────────────────────────────────────────
+  // ─── Queue Topic Injection ─────────────────────────────────────────────────
   // Injects up to 2 learning topics per day when a pillar is neglected (<33%).
-  // Queue entries use entry_type='queue_topic' and topic_item_id (not task_id).
-  // Time slots are placeholder '00:00' — the AI promptBuilder or manual plan
-  // can assign them to actual open slots.
+  // Assigns real time slots by finding the first free gap after all scheduled entries.
+  // Falls back to '00:00' placeholder only when all slots are completely full.
+  const DEFAULT_QUEUE_TOPIC_DURATION = 30; // minutes
   const QUEUE_TOPIC_CAP = 2;
   let queueTopicsAdded = 0;
   const totalPillarCompleted = Object.values(context.pillarBalance7d).reduce(
@@ -165,11 +163,41 @@ export function generatePlan(context: PlanContext) {
       : 0;
     if (pillarPct > 33) continue;
 
+    // Find first free gap across all available slots
+    let assignedStart: string | null = null;
+    let assignedEnd: string | null = null;
+
+    for (const slot of context.availableSlots) {
+      const slotStartStr = formatTime(slot.start);
+      const slotEndStr = formatTime(slot.end);
+
+      // Entries scheduled in this slot's time window
+      const occupiedInSlot = planEntries
+        .filter((e) => e.time_start >= slotStartStr && e.time_end <= slotEndStr)
+        .sort((a, b) => a.time_start.localeCompare(b.time_start));
+
+      // Gap starts after the last scheduled entry in this slot (or at slot start)
+      const gapStart = occupiedInSlot.length > 0
+        ? occupiedInSlot[occupiedInSlot.length - 1].time_end
+        : slotStartStr;
+
+      const [gh, gm] = gapStart.split(':').map(Number);
+      const [eh, em] = slotEndStr.split(':').map(Number);
+      const remainingMinutes = (eh * 60 + em) - (gh * 60 + gm);
+
+      if (remainingMinutes >= DEFAULT_QUEUE_TOPIC_DURATION) {
+        assignedStart = gapStart;
+        const endTotal = gh * 60 + gm + DEFAULT_QUEUE_TOPIC_DURATION;
+        assignedEnd = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
+        break;
+      }
+    }
+
     const prefix = candidate.queue_type === 'dsa' ? 'Solve' : 'Study';
 
     planEntries.push({
-      time_start: '00:00',   // placeholder — AI or user assigns the real slot
-      time_end: '00:00',
+      time_start: assignedStart ?? '00:00', // '00:00' only when all slots are fully packed
+      time_end: assignedEnd ?? '00:00',
       topic_item_id: (candidate.nextItem as any)._id as mongoose.Types.ObjectId,
       title: `${prefix}: ${candidate.nextItem.title}`,
       pillar: candidate.pillar,

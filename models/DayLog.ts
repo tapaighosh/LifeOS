@@ -15,6 +15,10 @@ export interface IDayLog extends Document {
   energy_rating: number; // 1-5
   reflection?: string;
   ai_insight?: string;
+  /** Guards against double-submission. Once true, the checkin route returns 409. */
+  is_submitted: boolean;
+  /** Timestamp of the first (valid) submission. Null until first submit. */
+  submitted_at?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +39,8 @@ const DayLogSchema: Schema<IDayLog> = new Schema(
     energy_rating: { type: Number, min: 1, max: 5, required: true },
     reflection: { type: String, maxlength: 200 },
     ai_insight: { type: String },
+    is_submitted: { type: Boolean, default: false },
+    submitted_at: { type: Date },
   },
   {
     timestamps: true,

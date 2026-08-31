@@ -7,10 +7,12 @@ import DailyPlan from '@/models/DailyPlan';
 import RevisionQueue from '@/models/RevisionQueue';
 import Task from '@/models/Task';
 import Challenge from '@/models/Challenge';
+import UserSettings from '@/models/UserSettings';
 import { dayLogCheckinSchema } from '@/lib/validators/dayLog';
 import { buildNightInsight } from '@/lib/ai/insightBuilder';
 import { onTaskCompleted, completeRevision } from '@/lib/revision/revisionEngine';
 import { advanceQueueItem } from '@/lib/queues/queueEngine';
+import { getOffsetDateInTimezone } from '@/lib/utils/dateHelpers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,10 +39,25 @@ export async function POST(request: NextRequest) {
 
     const { date, entries, energy_rating, reflection } = parseResult.data;
 
-    // 1. Save DayLog
+    // ── Fetch user settings (needed for timezone + pillar targets) ──────────
+    const settings = await UserSettings.findOne().lean();
+    const tz = settings?.timezone ?? 'Asia/Kolkata';
+
+    // ── Idempotency guard: reject duplicate submissions ─────────────────────
+    // Once is_submitted is true, all side effects have already fired.
+    // A second submission would double-count challenges, revision seeds, and queue advances.
+    const existingLog = await DayLog.findOne({ date });
+    if (existingLog?.is_submitted) {
+      return NextResponse.json(
+        { error: 'Check-in already submitted for this date.', code: 'ALREADY_SUBMITTED' },
+        { status: 409 }
+      );
+    }
+
+    // 1. Save DayLog (mark as submitted atomically with the data write)
     const dayLog = await DayLog.findOneAndUpdate(
       { date },
-      { $set: { entries, energy_rating, reflection, ai_insight: null } },
+      { $set: { entries, energy_rating, reflection, ai_insight: null, is_submitted: true, submitted_at: new Date() } },
       { new: true, upsert: true }
     );
 
@@ -98,9 +115,8 @@ export async function POST(request: NextRequest) {
       .lean();
 
     // 5. Flag neglected pillars (weekly balance)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+    // Uses the user's actual pillar_balance_target, not a hardcoded 15% threshold.
+    const sevenDaysAgoStr = getOffsetDateInTimezone(tz, -7);
 
     const weekPlans = await DailyPlan.find({
       date: { $gte: sevenDaysAgoStr, $lte: date }
@@ -119,9 +135,16 @@ export async function POST(request: NextRequest) {
     const total = moneyCount + soulCount + curiosityCount;
     let neglectedPillars: string[] = [];
     if (total > 0) {
-      if ((moneyCount / total) < 0.15) neglectedPillars.push('money');
-      if ((soulCount / total) < 0.15) neglectedPillars.push('soul');
-      if ((curiosityCount / total) < 0.15) neglectedPillars.push('curiosity');
+      // A pillar is neglected when its actual share is below 60% of its target share.
+      // Example: target=40%, threshold=24%. Old hardcoded 15% would miss edge cases.
+      const targets = (settings as any)?.pillar_balance_target ?? { money: 33, soul: 33, curiosity: 33 };
+      const NEGLECT_FACTOR = 0.6;
+      const moneyPct  = (moneyCount / total) * 100;
+      const soulPct   = (soulCount / total) * 100;
+      const curiosityPct = (curiosityCount / total) * 100;
+      if (moneyPct  < targets.money  * NEGLECT_FACTOR) neglectedPillars.push('money');
+      if (soulPct   < targets.soul   * NEGLECT_FACTOR) neglectedPillars.push('soul');
+      if (curiosityPct < targets.curiosity * NEGLECT_FACTOR) neglectedPillars.push('curiosity');
     }
 
     // 6. Generate AI Night Insight
@@ -145,6 +168,13 @@ export async function POST(request: NextRequest) {
         if (!challenge) continue;
 
         if (entry.status === 'done') {
+          // ── Same-day guard: prevent double-counting if submitted twice ──────
+          // The is_submitted guard above blocks this at route level, but this is
+          // a defensive second layer (e.g. direct API calls bypassing the route).
+          if (challenge.last_completed_on === date) {
+            continue; // already counted today — skip
+          }
+
           const prevLastCompleted = challenge.last_completed_on;
           challenge.total_completed += 1;
           challenge.last_completed_on = date;
@@ -219,7 +249,7 @@ export async function POST(request: NextRequest) {
             const newOrder = (maxOrderItem?.order ?? 0) + 1;
             await TopicItem.findByIdAndUpdate(entry.topic_item_id.toString(), {
               $inc: { skip_count: 1 },
-              $set: { last_skipped_on: date, order: newOrder },
+              $set: { last_skipped_on: date, order: newOrder, status: 'pending' },
             });
           }
         }

@@ -35,7 +35,14 @@ export async function GET(
     // 'skipped' tab = pending items where skip_count > 0 (status stays 'pending' after skip)
     let filter: Record<string, unknown>;
     if (tab === 'pending') {
-      filter = { queue_id, status: 'pending', $or: [{ skip_count: 0 }, { skip_count: { $exists: false } }] };
+      filter = {
+        queue_id,
+        $or: [
+          { status: 'in_progress' },
+          { status: 'pending', skip_count: { $in: [0, null] } },
+          { status: 'pending', skip_count: { $exists: false } }
+        ]
+      };
     } else if (tab === 'covered') {
       filter = { queue_id, status: 'covered' };
     } else if (tab === 'skipped') {

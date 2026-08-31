@@ -67,6 +67,7 @@ export async function PATCH(
         $set: {
           last_skipped_on: today,
           order: newOrder,
+          status: 'pending',
         },
       });
 
@@ -99,6 +100,7 @@ export async function PATCH(
         $set: {
           last_skipped_on: today,
           order: newOrder,
+          status: 'pending',
         },
       });
 

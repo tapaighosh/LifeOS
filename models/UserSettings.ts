@@ -93,9 +93,8 @@ UserSettingsSchema.pre('validate', function () {
   }
 });
 
-if (mongoose.models.UserSettings) {
-  delete mongoose.models.UserSettings;
-}
-const UserSettings: Model<IUserSettings> = mongoose.model<IUserSettings>('UserSettings', UserSettingsSchema);
+const UserSettings: Model<IUserSettings> =
+  mongoose.models.UserSettings as Model<IUserSettings> ||
+  mongoose.model<IUserSettings>('UserSettings', UserSettingsSchema);
 
 export default UserSettings;

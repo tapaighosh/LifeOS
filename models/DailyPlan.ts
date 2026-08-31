@@ -22,6 +22,10 @@ export interface IDailyPlan extends Document {
   skipped_tasks: Types.ObjectId[];
   locked: boolean;
   paused: boolean;
+  /** True while a plan generation is in-flight. Atomic lock to prevent concurrent generations. */
+  generating: boolean;
+  /** When the generation lock was acquired. Used to detect stale locks (> 3 min = crashed request). */
+  generating_since?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +52,8 @@ const DailyPlanSchema: Schema<IDailyPlan> = new Schema(
     skipped_tasks: [{ type: Schema.Types.ObjectId, ref: 'Task' }],
     locked: { type: Boolean, default: false },
     paused: { type: Boolean, default: false },
+    generating: { type: Boolean, default: false },
+    generating_since: { type: Date },
   },
   {
     timestamps: true,

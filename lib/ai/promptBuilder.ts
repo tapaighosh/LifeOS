@@ -1,14 +1,33 @@
 import { PlanContext } from '@/lib/scheduler/contextCollector';
 
+function formatHHMM(date: Date): string {
+  return date.toTimeString().slice(0, 5); // "HH:MM"
+}
+
 export function buildMorningPrompt(context: PlanContext) {
   const systemPrompt = `You are LifeOS AI, an intelligent personal scheduler.
 Your objective is to generate an optimal DailyPlan based on the user's available time slots, carryover tasks, priorities, energy levels, and pillar balance.
-You MUST output strictly valid JSON conforming exactly to the user's request. No markdown code blocks like \`\`\`json, just the raw JSON text.`;
+You MUST output strictly valid JSON conforming exactly to the user's request. No markdown code blocks like \`\`\`json, just the raw JSON text.
+
+CRITICAL RULES FOR ENTRIES:
+- Every entry MUST have entry_type set to either 'task' or 'queue_topic'.
+- 'task' entries MUST have task_id. Do NOT include topic_item_id on task entries.
+- 'queue_topic' entries MUST have topic_item_id. Do NOT include task_id on queue_topic entries.
+- time_start and time_end must be in HH:MM format (e.g. '09:00', not '9:0' or ISO strings).
+- time_end must always be strictly after time_start.`;
 
 const userPrompt = `
 Date: ${context.date}
 Available Time Slots:
-${JSON.stringify(context.slots, null, 2)}
+${JSON.stringify(
+  context.slots.map(s => ({
+    label: s.period,
+    from: formatHHMM(s.start),
+    to: formatHHMM(s.end),
+    duration_minutes: s.duration,
+  })),
+  null, 2
+)}
 
 Weekly Pillar Balance (lower means neglected):
 ${JSON.stringify(context.pillarBalance, null, 2)}
@@ -20,7 +39,7 @@ Recharge Menu:
 ${JSON.stringify(context.rechargeMenu, null, 2)}
 
 Tasks to Schedule:
-${JSON.stringify(context.pendingTasks.map(t => ({ id: t._id, title: t.title, duration: t.duration, energy_cost: t.energy_cost, priority: t.priority, type: t.type, pillar: t.pillar })), null, 2)}
+${JSON.stringify(context.pendingTasks.map(t => ({ id: (t._id as any).toString(), title: t.title, duration: t.duration, energy_cost: t.energy_cost, priority: t.priority, type: t.type, pillar: t.pillar })), null, 2)}
 
 Active Topic Queues (next items to surface if pillar is neglected):
 ${JSON.stringify(
