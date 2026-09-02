@@ -112,13 +112,28 @@ export function generatePlan(context: PlanContext) {
     }
   };
 
+  // ─── BUG-24: Shuffle recharge pool once for the whole day ─────────────────
+  // Previously Math.random() was called independently per slot, so morning and
+  // evening could get the same recharge item. Shuffle once, then pick sequentially.
+  function shuffleArray<T>(arr: T[]): T[] {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
+  const favouritePool = context.rechargeMenu.filter((r) => (r as any).favourite);
+  const basePool = favouritePool.length > 0 ? favouritePool : context.rechargeMenu;
+  const shuffledRechargePool = shuffleArray(basePool);
+  let rechargePoolIndex = 0;
+
   // Process Morning Slots
   const morningSlots = context.availableSlots.filter(s => s.period === 'morning');
   for (const slot of morningSlots) {
-    const favouritePool = context.rechargeMenu.filter((r) => (r as any).favourite);
-    const rechargePool = favouritePool.length > 0 ? favouritePool : context.rechargeMenu;
-    const recharge = rechargePool.length > 0
-      ? rechargePool[Math.floor(Math.random() * rechargePool.length)]
+    const recharge = shuffledRechargePool.length > 0
+      ? shuffledRechargePool[rechargePoolIndex++ % shuffledRechargePool.length]
       : undefined;
     scheduleSlot(slot, morningTasks, recharge);
   }
@@ -126,13 +141,12 @@ export function generatePlan(context: PlanContext) {
   // Process Evening Slots
   const eveningSlots = context.availableSlots.filter(s => s.period === 'evening');
   for (const slot of eveningSlots) {
-    const favouritePool = context.rechargeMenu.filter((r) => (r as any).favourite);
-    const rechargePool = favouritePool.length > 0 ? favouritePool : context.rechargeMenu;
-    const recharge = rechargePool.length > 0
-      ? rechargePool[Math.floor(Math.random() * rechargePool.length)]
+    const recharge = shuffledRechargePool.length > 0
+      ? shuffledRechargePool[rechargePoolIndex++ % shuffledRechargePool.length]
       : undefined;
     scheduleSlot(slot, eveningTasks, recharge);
   }
+
 
   // Identify skipped tasks
   for (const task of tasksToSchedule) {

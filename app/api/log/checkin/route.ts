@@ -55,9 +55,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Save DayLog (mark as submitted atomically with the data write)
+    // BUG-23 fix: do NOT set ai_insight: null upfront — if AI fails later it would
+    // permanently stay null, discarding any previously generated insight.
+    // ai_insight is only written after a successful AI call (step 6 below).
     const dayLog = await DayLog.findOneAndUpdate(
       { date },
-      { $set: { entries, energy_rating, reflection, ai_insight: null, is_submitted: true, submitted_at: new Date() } },
+      { $set: { entries, energy_rating, reflection, is_submitted: true, submitted_at: new Date() } },
       { new: true, upsert: true }
     );
 
@@ -101,18 +104,40 @@ export async function POST(request: NextRequest) {
       const revQueueItem = await RevisionQueue.findOne({ task_id: entry.task_id });
       if (revQueueItem) {
         // It is a revision task — advance the cycle
-        await completeRevision(revQueueItem);
+        await completeRevision(revQueueItem, date); // BUG-12: pass checkin date, not server clock
       } else if (task.revision) {
         // First-time completion of a revisable task — seed the queue
-        await onTaskCompleted(task);
+        await onTaskCompleted(task, date); // BUG-12: pass checkin date
       }
     }
 
-    // 4. Generate tomorrow preview (top 3 tasks based on active)
-    const topTasks = await Task.find({ active: true, type: { $ne: 'recharge' } })
+    // 4. Generate tomorrow preview — BUG-22 fix: filter by task frequency
+    // Previously fetched top 3 by priority ignoring frequency;
+    // weekly tasks would surface on wrong days (e.g. a Monday-only task shown on Sunday preview).
+    const tomorrowDateObj = new Date(date + 'T00:00:00Z');
+    tomorrowDateObj.setUTCDate(tomorrowDateObj.getUTCDate() + 1);
+    const tomorrowDOW = tomorrowDateObj.getUTCDay();
+
+    function isTaskDueTomorrow(task: any): boolean {
+      if (!task.frequency) return task.type !== 'recurring';
+      switch (task.frequency) {
+        case 'daily':    return true;
+        case 'alternate': {
+          const daysSinceCreation = Math.floor(
+            (tomorrowDateObj.getTime() - new Date(task.createdAt).getTime()) / 86400000
+          );
+          return daysSinceCreation % 2 === 0;
+        }
+        case '3x_week': return [1, 3, 5].includes(tomorrowDOW); // Mon/Wed/Fri
+        case 'weekly':  return tomorrowDOW === 1;                // Monday only
+        default:        return true;                             // 'custom' — include by default
+      }
+    }
+
+    const allActiveTasks = await Task.find({ active: true, type: { $ne: 'recharge' } })
       .sort({ priority: -1 })
-      .limit(3)
       .lean();
+    const topTasks = allActiveTasks.filter(isTaskDueTomorrow).slice(0, 3);
 
     // 5. Flag neglected pillars (weekly balance)
     // Uses the user's actual pillar_balance_target, not a hardcoded 15% threshold.

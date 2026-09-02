@@ -9,7 +9,7 @@ export interface IPlanEntry {
   pillar: 'money' | 'soul' | 'curiosity';
   type: 'recurring' | 'one-time' | 'project' | 'recharge';
   energy_cost: 'high' | 'medium' | 'low';
-  status: 'pending' | 'done' | 'partial' | 'skipped';
+  status: 'pending' | 'done' | 'partial' | 'skipped' | 'expired';
   /** Distinguishes entry origin: real task, break, or learning queue topic */
   entry_type?: 'task' | 'recharge' | 'queue_topic';
 }
@@ -39,7 +39,7 @@ const PlanEntrySchema: Schema = new Schema({
   pillar: { type: String, enum: ['money', 'soul', 'curiosity'], required: true },
   type: { type: String, enum: ['recurring', 'one-time', 'project', 'recharge'], required: true },
   energy_cost: { type: String, enum: ['high', 'medium', 'low'], required: true },
-  status: { type: String, enum: ['pending', 'done', 'partial', 'skipped'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'done', 'partial', 'skipped', 'expired'], default: 'pending' },
   entry_type: { type: String, enum: ['task', 'recharge', 'queue_topic'], default: 'task' },
 });
 

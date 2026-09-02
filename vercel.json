@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/expire-plans",
+      "schedule": "30 18 * * *"
+    },
+    {
       "path": "/api/notifications/morning",
       "schedule": "45 0 * * *"
     },

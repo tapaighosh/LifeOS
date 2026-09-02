@@ -8,6 +8,8 @@
  *   - Task must exist and be active
  *   - Today's plan must exist
  *   - Plan must not be locked
+ *   - BUG-10: No two entries may overlap in time
+ *   - BUG-11: Requested window must fall within a configured availability slot
  *   - Inserts entry with status='pending'
  */
 
@@ -19,11 +21,16 @@ import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import DailyPlan from '@/models/DailyPlan';
 import Task from '@/models/Task';
+import UserSettings from '@/models/UserSettings';
+import { calculateAvailableSlots } from '@/lib/scheduler/slotCalculator';
 
 const addTaskSchema = z.object({
   task_id:    z.string().min(1, 'task_id is required'),
   time_start: z.string().regex(/^\d{2}:\d{2}$/, 'time_start must be HH:MM'),
   time_end:   z.string().regex(/^\d{2}:\d{2}$/, 'time_end must be HH:MM'),
+}).refine((d) => d.time_end > d.time_start, {
+  message: 'time_end must be after time_start',
+  path: ['time_end'],
 });
 
 export async function PATCH(request: NextRequest) {
@@ -66,6 +73,41 @@ export async function PATCH(request: NextRequest) {
     // Lock guard
     if (plan.locked) {
       return NextResponse.json({ error: 'Plan is locked', code: 'PLAN_LOCKED' }, { status: 403 });
+    }
+
+    // ── BUG-10: Overlap detection ─────────────────────────────────────────────
+    // Two time ranges overlap if: start1 < end2 AND end1 > start2
+    const hasOverlap = plan.plan.some((entry) =>
+      time_start < entry.time_end && time_end > entry.time_start
+    );
+    if (hasOverlap) {
+      return NextResponse.json(
+        { error: 'Time window overlaps an existing plan entry', code: 'TIME_OVERLAP' },
+        { status: 409 }
+      );
+    }
+
+    // ── BUG-11: Window validation ─────────────────────────────────────────────
+    // Requested time must fall within at least one of the user's configured availability slots.
+    const settings = await UserSettings.findOne().lean();
+    if (settings) {
+      // @ts-ignore — settings shape matches what slotCalculator expects
+      const availableSlots = calculateAvailableSlots(today, settings, []);
+      const withinASlot = availableSlots.some((slot) => {
+        const slotStart = slot.start.toTimeString().slice(0, 5);
+        const slotEnd   = slot.end.toTimeString().slice(0, 5);
+        return time_start >= slotStart && time_end <= slotEnd;
+      });
+
+      if (!withinASlot) {
+        return NextResponse.json(
+          {
+            error: 'Requested time window is outside configured availability slots',
+            code: 'OUT_OF_WINDOW',
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Push new entry
