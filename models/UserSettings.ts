@@ -23,6 +23,8 @@ export interface IUserSettings extends Document {
     soul: number;
     curiosity: number;
   };
+  /** Minutes reserved for overhead/breaks not counted in net schedulable capacity. Default: 30 */
+  overhead_budget_minutes: number;
   days_off: number[];
   /** Web Push API subscription — optional, set when user enables notifications */
   push_subscription?: StoredPushSubscription;
@@ -61,6 +63,12 @@ const UserSettingsSchema: Schema<IUserSettings> = new Schema(
         },
         message: 'Days off must be integers between 0 and 6.',
       },
+    },
+    overhead_budget_minutes: {
+      type: Number,
+      default: 30,
+      min: 0,
+      max: 120,
     },
     // Web Push subscription — stored as nested object, optional
     push_subscription: {

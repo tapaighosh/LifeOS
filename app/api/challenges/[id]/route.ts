@@ -97,11 +97,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (status) {
       challenge.status = status;
 
-      // If dropping: deactivate the linked task too
-      if (status === 'dropped' && challenge.linked_task_id) {
+      // GAP-05: Linked task status toggle
+      // If dropping or pausing: deactivate the linked task so scheduler stops surfacing it
+      // If resuming (active): reactivate the linked task
+      if ((status === 'dropped' || status === 'paused') && challenge.linked_task_id) {
         await Task.findByIdAndUpdate(challenge.linked_task_id, { $set: { active: false } });
+      } else if (status === 'active' && challenge.linked_task_id) {
+        await Task.findByIdAndUpdate(challenge.linked_task_id, { $set: { active: true } });
       }
-      // If pausing: task stays active — user can continue doing it manually
     }
 
     if (notes !== undefined) {

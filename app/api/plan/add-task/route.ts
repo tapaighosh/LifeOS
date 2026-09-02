@@ -119,7 +119,7 @@ export async function PATCH(request: NextRequest) {
       pillar: task.pillar,
       type: task.type,
       energy_cost: task.energy_cost,
-      status: 'pending',
+      status: 'planned',
       entry_type: 'task',
     });
 

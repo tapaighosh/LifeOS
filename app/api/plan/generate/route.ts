@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import UserSettings from '@/models/UserSettings';
 import DailyPlan from '@/models/DailyPlan';
+import Task from '@/models/Task';
 import { generateAndParsePlan } from '@/lib/ai/responseParser';
 import { collectPlanContext } from '@/lib/scheduler/contextCollector';
 import { generatePlan } from '@/lib/scheduler/planGenerator';
@@ -38,8 +39,6 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Step 2: Atomically acquire the generation lock ────────────────────────
-    // This prevents two concurrent requests from both calling the AI and overwriting each other.
-    // The filter matches only if generating is false OR the lock is stale (crashed request).
     const staleThreshold = new Date(Date.now() - LOCK_TIMEOUT_MS);
     const lockResult = await DailyPlan.findOneAndUpdate(
       {
@@ -78,6 +77,12 @@ export async function POST(request: NextRequest) {
       const context = await collectPlanContext(date, settings);
 
       let planDoc: any;
+      let scheduledTaskIds: string[] = [];
+
+      // Gross capacity
+      const gross_capacity_minutes = context.availableSlots.reduce((sum, s) => sum + s.duration, 0);
+      const OVERHEAD_BUDGET = settings.overhead_budget_minutes ?? 30;
+      const net_capacity_minutes = Math.max(0, gross_capacity_minutes - OVERHEAD_BUDGET);
 
       // ── Step 4: Attempt AI generation ────────────────────────────────────
       console.time('[AI] Generate Plan');
@@ -89,16 +94,32 @@ export async function POST(request: NextRequest) {
         const validation = await validateAIPlan(aiPlan);
         if (!validation.valid) {
           console.warn('[AI] Plan failed business validation, falling back to rule-based:', validation.errors);
-          // planDoc stays undefined — falls through to rule-based below
         } else {
           console.log('[AI] Successfully generated and validated plan with AI');
+          
+          const scheduled_minutes = aiPlan.plan.reduce((sum: number, entry: any) => {
+            if (!entry.time_start || !entry.time_end || entry.time_start === '00:00') return sum;
+            const [sh, sm] = entry.time_start.split(':').map(Number);
+            const [eh, em] = entry.time_end.split(':').map(Number);
+            return sum + ((eh * 60 + em) - (sh * 60 + sm));
+          }, 0);
+
+          scheduledTaskIds = aiPlan.plan
+            .filter((e: any) => e.entry_type === 'task' && e.task_id)
+            .map((e: any) => e.task_id);
+
           planDoc = {
             date,
             locked: false,
+            plan_status: 'draft',
             source: 'ai',
-            plan: aiPlan.plan.map((t: any) => ({ ...t, status: 'pending' })),
+            plan: aiPlan.plan.map((t: any) => ({ ...t, status: 'planned' })),
             skipped_tasks: aiPlan.skipped_tasks,
+            displaced_tasks: [],
             ai_note: aiPlan.ai_note,
+            gross_capacity_minutes,
+            net_capacity_minutes,
+            scheduled_minutes,
           };
         }
       }
@@ -106,7 +127,10 @@ export async function POST(request: NextRequest) {
       // ── Step 6: Rule-based fallback (if AI failed or business validation failed) ──
       if (!planDoc) {
         console.log('[AI] Using rule-based scheduler');
-        planDoc = generatePlan(context);
+        const rulePlan = generatePlan(context);
+        scheduledTaskIds = rulePlan.scheduledTaskIds;
+        delete (rulePlan as any).scheduledTaskIds;
+        planDoc = rulePlan;
       }
 
       // ── Step 7: Save to DB — release generation lock in same write ────────
@@ -119,15 +143,23 @@ export async function POST(request: NextRequest) {
         { new: true, upsert: true, returnDocument: 'after' }
       ).lean();
 
+      // ── Step 8: Update last_scheduled_on for all scheduled tasks (GAP-04 / E7) ──
+      if (scheduledTaskIds.length > 0) {
+        await Task.updateMany(
+          { _id: { $in: scheduledTaskIds } },
+          { $set: { last_scheduled_on: date } }
+        ).catch((err) => console.error('[generate] Failed to update last_scheduled_on:', err));
+      }
+
       return NextResponse.json(savedPlan, { status: 200 });
     } catch (error) {
       // Always release lock on inner error to prevent permanent blocking
       await DailyPlan.findOneAndUpdate(
         { date },
         { $set: { generating: false } }
-      ).catch(() => {}); // swallow — already in error state
+      ).catch(() => {});
 
-      throw error; // re-throw for outer catch
+      throw error;
     }
   } catch (error) {
     console.error('[POST /api/plan/generate]', error);

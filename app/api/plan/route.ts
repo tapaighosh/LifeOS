@@ -38,15 +38,17 @@ const patchPlanEntrySchema = z.object({
   pillar:        z.enum(['money', 'soul', 'curiosity']),
   energy_cost:   z.enum(['low', 'medium', 'high']),
   type:          z.enum(['recurring', 'one-time', 'project', 'recharge']),
-  status:        z.enum(['pending', 'done', 'skipped', 'partial', 'expired']),
+  status:        z.enum(['planned', 'pending', 'in_progress', 'done', 'partial', 'skipped', 'expired', 'displaced']),
 });
 
 const patchPlanSchema = z.object({
-  date:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
-  plan:   z.array(patchPlanEntrySchema).optional(),
-  locked: z.boolean().optional(),
-  paused: z.boolean().optional(),
+  date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
+  plan:        z.array(patchPlanEntrySchema).optional(),
+  locked:      z.boolean().optional(),
+  paused:      z.boolean().optional(),
+  plan_status: z.enum(['draft', 'active', 'completed', 'closed']).optional(),
 });
+
 
 export async function PATCH(req: Request) {
   try {
@@ -69,12 +71,17 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const { date, plan, locked, paused } = parseResult.data;
+    const { date, plan, locked, paused, plan_status } = parseResult.data;
 
     const updateData: any = {};
-    if (plan   !== undefined) updateData.plan   = plan;
-    if (locked !== undefined) updateData.locked = locked;
+    if (plan !== undefined) updateData.plan = plan;
+    if (locked !== undefined) {
+      updateData.locked = locked;
+      if (locked && !plan_status) updateData.plan_status = 'active';
+    }
     if (paused !== undefined) updateData.paused = paused;
+    if (plan_status !== undefined) updateData.plan_status = plan_status;
+
 
     const updatedPlan = await DailyPlan.findOneAndUpdate(
       { date },

@@ -30,24 +30,63 @@ export function generatePlan(context: PlanContext) {
 
   let tasksToSchedule = Array.from(allTasksMap.values());
 
+  // ─── GAP-03: Minimum Pillar Guarantee (Floor Allocation) ─────────────────
+  // Read from user-configured pillar_balance_target (injected via context.pillarBalance7d context
+  // was computed from actual pillar_balance_target in generate/route) — NOT hardcoded 33/33/33.
+  // context.pillarBalance = IDailyPlan-level aggregation; targetPillars = IDailyPlan-level config.
+  // Use context.userPillarTargets if injected; otherwise safe fallback matches schema default 40/30/30.
+  const userPillarTargets = context.userPillarTargets;
+  const NEGLECT_FACTOR = 0.6;
+
+  const neglectedPillars = new Set<'money' | 'soul' | 'curiosity'>();
+  const totalCompleted = Object.values(context.pillarBalance7d).reduce((a, b) => a + b, 0);
+  if (totalCompleted > 0) {
+    (['money', 'soul', 'curiosity'] as const).forEach((pillar) => {
+      const pct = context.pillarBalance7d[pillar];
+      if (pct < userPillarTargets[pillar] * NEGLECT_FACTOR) {
+        neglectedPillars.add(pillar);
+      }
+    });
+  }
+
+  // Extract reserved tasks for neglected pillars
+  const reservedTaskIds = new Set<string>();
+  const reservedTasks: ITask[] = [];
+  for (const pillar of Array.from(neglectedPillars)) {
+    const candidate = tasksToSchedule.find((t) => t.pillar === pillar && !reservedTaskIds.has(t._id!.toString()));
+    if (candidate) {
+      reservedTaskIds.add(candidate._id!.toString());
+      reservedTasks.push(candidate);
+    }
+  }
+
+  const remainingTasks = tasksToSchedule.filter((t) => !reservedTaskIds.has(t._id!.toString()));
+
   // Sort tasks: Priority DESC, then Energy Cost
   const energyWeight = { high: 3, medium: 2, low: 1 };
   
-  // Sort for Morning (Energy DESC)
-  const morningTasks = [...tasksToSchedule].sort((a, b) => {
+  // Morning candidate pool: reserved neglected tasks first, then general sorted
+  const morningSortedRemaining = [...remainingTasks].sort((a, b) => {
     if (b.priority !== a.priority) return b.priority - a.priority;
     return energyWeight[b.energy_cost] - energyWeight[a.energy_cost];
   });
+  const morningTasks = [...reservedTasks, ...morningSortedRemaining];
 
-  // Sort for Evening (Energy ASC)
-  const eveningTasks = [...tasksToSchedule].sort((a, b) => {
+  // Evening candidate pool
+  const eveningSortedRemaining = [...remainingTasks].sort((a, b) => {
     if (b.priority !== a.priority) return b.priority - a.priority;
     return energyWeight[a.energy_cost] - energyWeight[b.energy_cost];
   });
+  const eveningTasks = [...reservedTasks, ...eveningSortedRemaining];
 
   const planEntries: IPlanEntry[] = [];
   const skippedTasks: mongoose.Types.ObjectId[] = [];
   const scheduledTaskIds = new Set<string>();
+
+  // Capacity calculation
+  const gross_capacity_minutes = context.availableSlots.reduce((sum, s) => sum + s.duration, 0);
+  const OVERHEAD_BUDGET = 30; // 30 mins default buffer for bio breaks / transitions
+  const net_capacity_minutes = Math.max(0, gross_capacity_minutes - OVERHEAD_BUDGET);
 
   const scheduleSlot = (
     slot: TimeSlot,
@@ -76,7 +115,7 @@ export function generatePlan(context: PlanContext) {
             pillar: 'soul',
             type: 'recharge',
             energy_cost: 'low',
-            status: 'pending',
+            status: 'planned', // Updated to 'planned'
             entry_type: 'recharge',
           });
           currentTime = endTime;
@@ -101,7 +140,7 @@ export function generatePlan(context: PlanContext) {
           pillar: task.pillar,
           type: task.type,
           energy_cost: task.energy_cost,
-          status: 'pending',
+          status: 'planned', // Updated to 'planned'
           entry_type: 'task',
         });
         
@@ -113,8 +152,6 @@ export function generatePlan(context: PlanContext) {
   };
 
   // ─── BUG-24: Shuffle recharge pool once for the whole day ─────────────────
-  // Previously Math.random() was called independently per slot, so morning and
-  // evening could get the same recharge item. Shuffle once, then pick sequentially.
   function shuffleArray<T>(arr: T[]): T[] {
     const copy = [...arr];
     for (let i = copy.length - 1; i > 0; i--) {
@@ -147,7 +184,6 @@ export function generatePlan(context: PlanContext) {
     scheduleSlot(slot, eveningTasks, recharge);
   }
 
-
   // Identify skipped tasks
   for (const task of tasksToSchedule) {
     if (!scheduledTaskIds.has(task._id!.toString())) {
@@ -156,23 +192,16 @@ export function generatePlan(context: PlanContext) {
   }
 
   // ─── Queue Topic Injection ─────────────────────────────────────────────────
-  // Injects up to 2 learning topics per day when a pillar is neglected (<33%).
-  // Assigns real time slots by finding the first free gap after all scheduled entries.
-  // Falls back to '00:00' placeholder only when all slots are completely full.
   const DEFAULT_QUEUE_TOPIC_DURATION = 30; // minutes
   const QUEUE_TOPIC_CAP = 2;
   let queueTopicsAdded = 0;
-  const totalPillarCompleted = Object.values(context.pillarBalance7d).reduce(
-    (sum, val) => sum + val,
-    0
-  );
 
   for (const candidate of (context.queueCandidates ?? [])) {
     if (queueTopicsAdded >= QUEUE_TOPIC_CAP) break;
     if (!candidate.nextItem) continue;
 
     // Only inject when the pillar is below 33% of recent completions
-    const pillarPct = totalPillarCompleted > 0
+    const pillarPct = totalCompleted > 0
       ? context.pillarBalance7d[candidate.pillar]
       : 0;
     if (pillarPct > 33) continue;
@@ -210,27 +239,41 @@ export function generatePlan(context: PlanContext) {
     const prefix = candidate.queue_type === 'dsa' ? 'Solve' : 'Study';
 
     planEntries.push({
-      time_start: assignedStart ?? '00:00', // '00:00' only when all slots are fully packed
+      time_start: assignedStart ?? '00:00',
       time_end: assignedEnd ?? '00:00',
       topic_item_id: (candidate.nextItem as any)._id as mongoose.Types.ObjectId,
       title: `${prefix}: ${candidate.nextItem.title}`,
       pillar: candidate.pillar,
       type: 'one-time',
       energy_cost: 'low',
-      status: 'pending',
+      status: 'planned', // Updated to 'planned'
       entry_type: 'queue_topic',
     } as IPlanEntry);
 
     queueTopicsAdded++;
   }
 
+  // Compute scheduled minutes
+  const scheduled_minutes = planEntries.reduce((sum, entry) => {
+    if (!entry.time_start || !entry.time_end || entry.time_start === '00:00') return sum;
+    const [sh, sm] = entry.time_start.split(':').map(Number);
+    const [eh, em] = entry.time_end.split(':').map(Number);
+    return sum + ((eh * 60 + em) - (sh * 60 + sm));
+  }, 0);
+
   return {
     date: context.targetDate,
     plan: planEntries,
     ai_note: 'Plan generated using rule-based algorithms due to time constraints.',
-    source: 'rule-based',
+    source: 'rule-based' as const,
     skipped_tasks: skippedTasks,
+    displaced_tasks: [],
     locked: false,
     paused: false,
+    plan_status: 'draft' as const,
+    gross_capacity_minutes,
+    net_capacity_minutes,
+    scheduled_minutes,
+    scheduledTaskIds: Array.from(scheduledTaskIds),
   };
 }

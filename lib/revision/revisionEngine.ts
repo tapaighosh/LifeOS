@@ -33,6 +33,9 @@ export async function completeRevision(
     nextDate.setUTCDate(nextDate.getUTCDate() + intervalDays);
     queueItem.next_revision = nextDate;
     queueItem.cycle_index += 1;
+    queueItem.status = 'active';
+  } else {
+    queueItem.status = 'mastered';
   }
 
   await queueItem.save();
@@ -57,6 +60,7 @@ export async function onTaskCompleted(task: ITask, completionDate?: string): Pro
     // Reset: wipe history and re-seed from cycle_index 0
     existing.learned_on = todayUTC;
     existing.cycle_index = 0;
+    existing.status = 'active';
     existing.revision_history = [todayUTC];
     existing.next_revision = todayUTC; // placeholder — completeRevision sets the real date
     await existing.save();
@@ -68,6 +72,7 @@ export async function onTaskCompleted(task: ITask, completionDate?: string): Pro
       learned_on: todayUTC,
       next_revision: todayUTC, // placeholder — completeRevision sets the real date
       cycle_index: 0,
+      status: 'active',
       revision_history: [todayUTC],
     });
     await completeRevision(newItem, dateStr); // advances to cycle_index 1, sets next_revision = today + 1 day
@@ -75,7 +80,7 @@ export async function onTaskCompleted(task: ITask, completionDate?: string): Pro
 }
 
 /**
- * Returns all RevisionQueue items whose next_revision is on or before `date`.
+ * Returns all active RevisionQueue items whose next_revision is on or before `date`.
  * BUG-21 fix: uses UTC end-of-day (`T23:59:59.999Z`) instead of local
  * `setHours(23,59,59)` which varies by server timezone.
  */
@@ -84,6 +89,7 @@ export async function getRevisionsDue(date: string): Promise<IRevisionQueue[]> {
   const endOfDayUTC = new Date(date + 'T23:59:59.999Z');
 
   return RevisionQueue.find({
+    status: 'active',
     next_revision: { $lte: endOfDayUTC },
   }).populate('task_id');
 }

@@ -29,6 +29,8 @@ export interface ITask extends Document {
   notes?: string;
   active: boolean;
   challenge_id?: mongoose.Types.ObjectId | null;
+  /** YYYY-MM-DD date string of when this task was last included in a DailyPlan */
+  last_scheduled_on?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -124,6 +126,11 @@ const TaskSchema: Schema<ITask> = new Schema(
     challenge_id: {
       type: Schema.Types.ObjectId,
       ref: 'Challenge',
+      default: null,
+    },
+    // YYYY-MM-DD date string when task was last scheduled into a plan
+    last_scheduled_on: {
+      type: String,
       default: null,
     },
   },

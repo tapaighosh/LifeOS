@@ -69,18 +69,24 @@ export async function POST(request: NextRequest) {
     if (plan) {
       let changed = false;
       for (const pEntry of plan.plan) {
-        // Skip queue_topic entries \u2014 they are handled separately by the queue hook
-        if (pEntry.entry_type === 'queue_topic' || !pEntry.task_id) continue;
-        const matchingLog = entries.find((e) => e.task_id === pEntry.task_id!.toString());
+        if (pEntry.entry_type === 'queue_topic') continue;
+        const matchingLog = entries.find((e) => e.task_id && pEntry.task_id && e.task_id === pEntry.task_id.toString());
         if (matchingLog) {
           pEntry.status = matchingLog.status as any;
           changed = true;
         }
       }
+
+      // Check if all entries in the plan are resolved
+      const allResolved = plan.plan.every((e) =>
+        ['done', 'partial', 'skipped', 'expired', 'displaced'].includes(e.status)
+      );
+      if (allResolved && plan.plan_status !== 'completed') {
+        plan.plan_status = 'completed';
+        changed = true;
+      }
+
       if (changed) {
-        // Also update skipped_tasks for any skipped entries? 
-        // We'll leave DailyPlan's skipped_tasks as original plan overflows for simplicity, 
-        // but log handles actual user skips.
         await plan.save();
       }
     }
@@ -162,7 +168,7 @@ export async function POST(request: NextRequest) {
     if (total > 0) {
       // A pillar is neglected when its actual share is below 60% of its target share.
       // Example: target=40%, threshold=24%. Old hardcoded 15% would miss edge cases.
-      const targets = (settings as any)?.pillar_balance_target ?? { money: 33, soul: 33, curiosity: 33 };
+      const targets = (settings as any)?.pillar_balance_target ?? { money: 40, soul: 30, curiosity: 30 };
       const NEGLECT_FACTOR = 0.6;
       const moneyPct  = (moneyCount / total) * 100;
       const soulPct   = (soulCount / total) * 100;

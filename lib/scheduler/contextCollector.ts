@@ -24,6 +24,8 @@ export interface PlanContext {
   energyHistory: number[];           // alias for AI promptBuilder
   pillarBalance7d: { money: number; soul: number; curiosity: number };
   pillarBalance: { money: number; soul: number; curiosity: number }; // alias
+  /** User's configured pillar balance targets (from UserSettings) */
+  userPillarTargets: { money: number; soul: number; curiosity: number };
   /** Active queue candidates for plan injection — one topic per pillar max */
   queueCandidates: QueueCandidate[];
 }
@@ -68,7 +70,7 @@ export async function collectPlanContext(
   const incompleteTaskIds = new Set<string>();
   for (const plan of recentPlans) {
     for (const entry of plan.plan) {
-      if (entry.status === 'pending' || entry.status === 'partial') {
+      if (entry.status === 'planned' || entry.status === 'pending' || entry.status === 'in_progress' || entry.status === 'partial') {
         // Skip queue_topic entries — they have no task_id
         if (entry.entry_type === 'queue_topic' || !entry.task_id) continue;
         incompleteTaskIds.add(entry.task_id.toString());
@@ -91,11 +93,11 @@ export async function collectPlanContext(
     switch (task.frequency) {
       case 'daily': return true;
       case 'alternate': {
-        const targetTime = new Date(targetDate).getTime();
-        const daysSinceCreation = Math.floor(
-          (targetTime - new Date((task as any).createdAt).getTime()) / 86400000
-        );
-        return daysSinceCreation % 2 === 0;
+        const targetTime = new Date(targetDate + 'T00:00:00Z').getTime();
+        const baseDateStr = (task as any).last_scheduled_on ?? (task as any).createdAt;
+        const baseTime = new Date(baseDateStr).getTime();
+        const daysDiff = Math.floor((targetTime - baseTime) / 86400000);
+        return (task as any).last_scheduled_on ? daysDiff >= 2 : daysDiff % 2 === 0;
       }
       case '3x_week': return [1, 3, 5].includes(dow); // Mon/Wed/Fri
       case 'weekly': return dow === 1;                  // Monday
@@ -151,6 +153,15 @@ export async function collectPlanContext(
   }
   const pendingTasks = Array.from(pendingTaskMap.values());
 
+  // Read user's pillar targets for floor-guarantee use in planGenerator
+  const userPillarTargets = settings.pillar_balance_target
+    ? {
+        money:     settings.pillar_balance_target.money,
+        soul:      settings.pillar_balance_target.soul,
+        curiosity: settings.pillar_balance_target.curiosity,
+      }
+    : { money: 40, soul: 30, curiosity: 30 }; // matches schema default
+
   return {
     targetDate,
     date: targetDate,
@@ -166,6 +177,7 @@ export async function collectPlanContext(
     energyHistory: energyRatings7d,
     pillarBalance7d,
     pillarBalance: pillarBalance7d,
+    userPillarTargets,
     queueCandidates,
   };
 }
